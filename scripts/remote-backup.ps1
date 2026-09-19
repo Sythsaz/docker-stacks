@@ -32,12 +32,12 @@ try {
 
     Write-Host "Executing database dumps..."
     
-    # Define known database containers and their dump commands
-    # Security Note: Uses $(cat /run/secrets/...) because _FILE environment variables 
-    # do NOT populate the raw password variables inside the container environment.
+    # Security Note: Infisical injects secrets directly into runtime memory.
+    # We reference the native environment variables (e.g., $$MYSQL_ROOT_PASSWORD)
+    # instead of the deprecated /run/secrets/ mounts.
     $dbTasks = @(
-        @{ Name="traccar-db"; Cmd="mysqldump -u root -p$$(cat /run/secrets/traccar_db_root) --all-databases | gzip" }
-        @{ Name="web-db-1"; Cmd="mysqldump -u root -p$$(cat /run/secrets/mysql_root_password) --all-databases | gzip" }
+        @{ Name="traccar-db"; Cmd="mysqldump -u root -p`$$MARIADB_ROOT_PASSWORD --all-databases | gzip" }
+        @{ Name="web-db-1"; Cmd="mysqldump -u root -p`$$MYSQL_ROOT_PASSWORD --all-databases | gzip" }
         @{ Name="authentik-db"; Cmd="pg_dumpall -U authentik | gzip" }
         @{ Name="homeassistant-db"; Cmd="pg_dumpall -U homeassistant | gzip" }
     )
