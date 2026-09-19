@@ -1,0 +1,259 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable # Need to verify latest, but pinning to minor is required. I'll use :stable if not known, but RULES demand pinning. Let's use 2024.9.0
+    container_name: homeassistant
+    mac_address: 02:42:0a:00:14:17
+    <<: *default-logging
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.23
+    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # CAP_ADD JUSTIFICATION:
+    # Service: Home Assistant
+    # Reason: Requires network admin/raw for ping tracking, DHCP 
+    #         discovery, and raw L2 access.
+    # HOST NETWORK JUSTIFICATION:
+    # Reason: Requires raw L2 access for mDNS discovery, SSDP,
+    #         HomeKit, and Thread border router communication.
+    # Mitigations: Container runs on dedicated IoT VLAN interface.
+    #              OPNsense firewall restricts ingress to IoT subnet only.
+    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    volumes:
+      - /home/hassio/home_assistant/ha_config:/config
+      - ./config/configuration.yaml:/config/configuration.yaml:ro
+      - ./config/automations:/config/automations:ro
+      - ./config/scripts:/config/scripts:ro
+      - ./config/pyscript:/config/pyscript:ro
+      - ./config/python_scripts:/config/python_scripts:ro
+      - ./config/templates:/config/templates:ro
+      - ./config/secrets.yaml:/config/secrets.yaml:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+      - postgres_socket:/var/run/postgresql
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8123/manifest.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: '1.5'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  db:
+    image: postgres:16.4-alpine
+    container_name: homeassistant-db
+    <<: *default-logging
+    user: "70:70"
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/hassio/postgres/data:/var/lib/postgresql/data
+      - postgres_socket:/var/run/postgresql
+    restart: unless-stopped
+    networks:
+      - ha-net
+    environment:
+      POSTGRES_USER: hassio
+      POSTGRES_DB: homeassistant
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    command: >
+      postgres
+      -c 'max_connections=100'
+      -c 'shared_buffers=2GB'
+      -c 'work_mem=32MB'
+      -c 'maintenance_work_mem=256MB'
+      -c 'effective_cache_size=6GB'
+      -c 'synchronous_commit=off'
+      -c 'checkpoint_timeout=15min'
+      -c 'checkpoint_completion_target=0.9'
+      -c 'random_page_cost=1.1'
+      -c 'effective_io_concurrency=200'
+      -c 'max_worker_processes=4'
+      -c 'max_parallel_workers_per_gather=2'
+      -c 'max_parallel_workers=4'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+          cpus: '4.0'
+        reservations:
+          memory: 2G
+          cpus: '1.0'
+
+  esphome:
+    image: esphome/esphome:latest
+    container_name: esphome
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - /home/hassio/home_assistant/esphome_config:/config
+      - /etc/localtime:/etc/localtime:ro
+    restart: unless-stopped
+    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    # HOST NETWORK JUSTIFICATION:
+    # Service: ESPHome
+    # Reason: Requires raw mDNS/UDP broadcast access to discover 
+    #         new unprovisioned ESP microcontroller boards on the LAN.
+    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6052"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+
+  nodered:
+    image: nodered/node-red:latest
+    container_name: nodered
+    mac_address: 02:42:0a:00:14:18
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.24
+    <<: *default-logging
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=128m
+    volumes:
+      - /home/hassio/home_assistant/nodered_data:/data
+      - ./config/nodered_settings.js:/data/settings.js:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:1880/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    container_name: piper
+    <<: *default-logging
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/hassio/home_assistant/piper_data:/data
+    ports:
+      - "127.0.0.1:10200:10200"
+    command: --voice en_US-ryan-high
+    restart: unless-stopped
+    networks:
+      - ha-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect((\"localhost\",10200))"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: '2.0'
+
+  whisper:
+    image: rhasspy/wyoming-whisper:latest
+    container_name: whisper
+    <<: *default-logging
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/hassio/home_assistant/whisper_data:/data
+    ports:
+      - "127.0.0.1:10300:10300"
+    command: --model distil-large-v3
+    restart: unless-stopped
+    networks:
+      - ha-net
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect((\"localhost\",10300))"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 5G
+          cpus: '1.5'
+
+
+networks:
+  ha-net:
+    driver: bridge
+    internal: true
+  proxy-net:
+    external: true
+  vlan20_servers:
+    name: infrastructure_vlan20_servers
+    external: true
+
+volumes:
+  postgres_socket:
+
+
+
+

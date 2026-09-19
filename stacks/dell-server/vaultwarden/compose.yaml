@@ -1,0 +1,219 @@
+﻿# ============================================================
+# VAULTWARDEN â€” HARDENED SELF-HOSTED PASSWORD MANAGER
+# ============================================================
+# Reference: C:\Users\ashto\Docker\RULES.md Â§2, Â§3, Â§4, Â§5, Â§6, Â§7, Â§9
+#
+# Source: https://github.com/dani-garcia/vaultwarden
+# Update cadence: Tier 0 â€” Alert only, manual review required
+# Last reviewed: 2026-09-16
+#
+# Clients: All official Bitwarden apps (desktop, mobile, browser, CLI, web)
+# Database: SQLite (WAL mode) â€” single-file, trivial backup
+# Crypto: AES-256-CBC + HMAC-SHA256 (client-side, zero-knowledge)
+# KDF: Argon2id (configure in account settings post-deploy)
+# ============================================================
+
+# â”€â”€ REUSABLE ANCHORS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+# Â§7: Logging â€” json-file with rotation to prevent disk exhaustion
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+# Â§6: Health check baseline
+x-healthcheck-defaults: &healthcheck-base
+  interval: 15s
+  timeout: 5s
+  retries: 3
+  start_period: 15s
+
+# â”€â”€ SERVICES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+services:
+
+  # â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  # VAULTWARDEN SERVER
+  # â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+  vaultwarden:
+    # Â§4.1: Pin to exact patch version â€” NEVER :latest for Tier 0 service
+    # Source: https://github.com/dani-garcia/vaultwarden/releases
+    # Registry: GHCR (primary, consistent with Authentik/TasmoAdmin stacks)
+    image: ghcr.io/dani-garcia/vaultwarden:1.37.3-alpine
+
+    container_name: infrastructure-vaultwarden-1
+
+    # Â§9.1: macvlan for LAN accessibility via VLAN 20
+    mac_address: 02:42:0a:00:14:13
+
+    <<: *default-logging
+
+    # Â§2.1: Non-root execution
+    # Vaultwarden alpine supports UID 1000. Host dir must be chown'd to match.
+    user: "1000:1000"
+
+    # Â§2.1: Privilege escalation prevention
+    security_opt:
+      - no-new-privileges:true
+
+    # Â§2.1: Drop ALL capabilities â€” Vaultwarden needs none
+    cap_drop:
+      - ALL
+
+    # Â§2.1: Immutable root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+
+    # Â§5.2: Resource limits â€” Vaultwarden is extremely lightweight (~30MB idle)
+    # Â§2.1: pids limit prevents fork bombs
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+          pids: 100
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+
+    # Â§3.3: ALL secrets via _FILE pattern â€” NEVER plaintext env vars
+    environment:
+      # â”€â”€ CORE SETTINGS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # DOMAIN must exactly match the URL you access Vaultwarden from.
+      # Used for OIDC redirect URI generation, CSRF, and HSTS.
+      DOMAIN: "https://vault.sythsaz.ca"
+
+      # HAProxy sets X-Real-IP to the real client IP (via CF-Connecting-IP).
+      # Without this, rate limiting and brute-force bans target the proxy, not the attacker.
+      IP_HEADER: "X-Real-IP"
+
+      # â”€â”€ REGISTRATION LOCKDOWN & QUOTAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      SIGNUPS_ALLOWED: "false"
+      SSO_SIGNUPS_ALLOWED: "false"          # NEW 1.37.3: Prevents SSO users from creating new vaults!
+      INVITATIONS_ALLOWED: "false"
+      SHOW_PASSWORD_HINT: "false"
+      PASSWORD_HINTS_ALLOWED: "false"       # Hardened server-side hint rejection
+      ORG_CREATION_USERS: "none"            # Prevents arbitrary organization creation
+      REQUIRE_DEVICE_EMAIL: "true"          # Require email confirmation for new client devices
+      USER_ATTACHMENT_LIMIT: 102400         # 100MB max per user to prevent disk fill
+      ORG_ATTACHMENT_LIMIT: 512000          # 500MB max per organization
+      TRASH_AUTO_DELETE_DAYS: 30            # Automatically prune soft-deleted items after 30d
+
+      # â”€â”€ ADMIN PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # Token is an Argon2id hash. Generate with:
+      #   docker run --rm -it ghcr.io/dani-garcia/vaultwarden:1.37.3-alpine /vaultwarden hash
+      # Using _FILE avoids dollar-sign escaping in compose
+      ADMIN_TOKEN: ${VW_ADMIN_TOKEN}
+      # â”€â”€ WEBSOCKET (real-time sync for desktop/browser) â”€â”€â”€â”€â”€
+      WEBSOCKET_ENABLED: "true"
+
+      # â”€â”€ PUSH NOTIFICATIONS (mobile live sync) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # Register at https://bitwarden.com/host for free ID+Key
+      # No vault data is transmitted â€” only sync signals via APNs/FCM
+      PUSH_ENABLED: "true"
+      PUSH_INSTALLATION_ID: ${VW_PUSH_ID}
+      PUSH_INSTALLATION_KEY: ${VW_PUSH_KEY}
+      # â”€â”€ ICON PRIVACY â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # SECURITY: Prevents domain leakage via favicon cache on server disk
+      DISABLE_ICON_DOWNLOAD: "true"
+      ICON_CACHE_TTL: 0                     # Disable icon cache expiration sweeps
+      ICON_CACHE_NEGTTL: 0
+
+      # â”€â”€ SMTP (same Gmail relay as Authentik stack) â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      SMTP_HOST: "smtp.gmail.com"
+      SMTP_PORT: 587
+      SMTP_SECURITY: "starttls"
+      SMTP_FROM: "vaultwarden@sythsaz.ca"
+      SMTP_FROM_NAME: "Vaultwarden"
+      SMTP_USERNAME: ${VW_SMTP_USERNAME}
+      SMTP_PASSWORD: ${VW_SMTP_PASSWORD}
+      # â”€â”€ SSO / OIDC (Authentik Integration) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # Authentication only â€” master password still required to decrypt vault.
+      # Authentik OIDC provider must be configured first (see walkthrough).
+      # Redirect URI in Authentik: https://vault.sythsaz.ca/identity/connect/oidc-signin
+      SSO_ENABLED: "true"
+      SSO_AUTHORITY: "https://auth.sythsaz.ca/application/o/vaultwarden/"
+      SSO_SCOPES: "openid email profile"
+      SSO_CLIENT_ID: ${VW_SSO_CLIENT_ID}
+      SSO_CLIENT_SECRET: ${VW_SSO_CLIENT_SECRET}
+      # SSO_ONLY: "false" â€” keep master password login as fallback
+      # If Authentik goes down, you can still login with email+master password
+      SSO_SIGNUPS_MATCH_EMAIL: "true"
+      SSO_ALLOW_UNKNOWN_EMAIL_VERIFICATION: "false" # Ensure IdP verifies email before account matching
+
+      # â”€â”€ LOGGING & FAIL2BAN INTEGRATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # Â§7.4: Production log level â€” no debug leakage
+      LOG_FILE: "/data/vaultwarden.log"     # Write to persistent bind mount for Fail2ban monitoring
+      LOG_LEVEL: "warn"
+      EXTENDED_LOGGING: "true"
+
+      # â”€â”€ RATE LIMITING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      LOGIN_RATELIMIT_SECONDS: 60
+      LOGIN_RATELIMIT_MAX_BURST: 5
+      ADMIN_RATELIMIT_SECONDS: 60
+      ADMIN_RATELIMIT_MAX_BURST: 3
+
+      # â”€â”€ ACCESS CONTROL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+      # Emergency access (dead-man switch for trusted contacts)
+      EMERGENCY_ACCESS_ALLOWED: "true"
+      # Bitwarden Send (encrypted ephemeral sharing)
+      SENDS_ALLOWED: "true"
+
+    # Â§3.3: Docker Secrets â€” mounted at /run/secrets/<name>
+
+    # Persistent data â€” contains SQLite DB, RSA keys, attachments
+    # Bind mount consistent with all Dell server stacks (/home/hassio/<service>)
+    # Pre-create: ssh hassio@10.0.20.221 "mkdir -p /home/hassio/vaultwarden && chown 1000:1000 /home/hassio/vaultwarden"
+    volumes:
+      - /home/hassio/vaultwarden:/data
+
+    # Â§2.3: NO direct port binding â€” LAN access via macvlan IP only
+    # Access at https://vault.sythsaz.ca or http://10.0.20.19
+
+    # Â§2.4: Network isolation â€” macvlan for LAN, no proxy-net needed
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.19
+
+    # Â§6: Health check â€” /alive endpoint confirmed in Vaultwarden docs
+    # Using wget (not curl) because alpine images include wget by default
+    healthcheck:
+      <<: *healthcheck-base
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:80/alive"]
+      start_period: 30s
+
+    # Â§4.2: WUD labels â€” Tier 0: alert only, NO auto-update
+    # CRITICAL SERVICE: Manual review + staged rollback required before any update
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      # NOTE: No wud.update=true â€” Tier 0 requires manual review
+      - "autoheal=true"
+
+    restart: unless-stopped
+
+# â”€â”€ SECRETS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# Â§3: Decrypted from .enc files at deploy time by deploy-remote.ps1
+# The plaintext files are ephemeral â€” created during deploy, never committed
+# See .gitignore: **/secrets/* is excluded, only *.enc files are tracked
+
+
+# â”€â”€ NETWORKS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+networks:
+  # Â§9.1: Reuse existing macvlan for VLAN 20 LAN access
+  # Created by the infrastructure stack â€” shared across dell-server stacks
+  vlan20_servers:
+    external: true
+    name: infrastructure_vlan20_servers
+
+# Note: No named volumes â€” using bind mount at /home/hassio/vaultwarden
+
+
+
+

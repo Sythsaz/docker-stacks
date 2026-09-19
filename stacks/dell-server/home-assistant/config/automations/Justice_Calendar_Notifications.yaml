@@ -1,0 +1,44 @@
+- id: '1729981615135'
+  alias: Justice Calendar Notification
+  description: ''
+  variables:
+    cal_entity: !secret justice_calendar_reminder_entity
+  triggers:
+  - trigger: time
+    at: '10:00:00'
+  - trigger: time
+    at: '12:00:00'
+  - trigger: time
+    at: '14:00:00'
+  - trigger: time
+    at: '16:00:00'
+  conditions:
+  - condition: template
+    value_template: >-
+      {% set cal = 'calendar.city_of_lethbridge_justice' %}
+      {{ (state_attr(cal, 'start_time')
+      | as_datetime).date() == (now() + timedelta(days=1)).date() and
+      is_state(cal, 'on') }}
+  actions:
+  # Need to update
+  - action: telegram_bot.send_message
+    metadata: {}
+    data:
+      parse_mode: markdown
+      chat_id:
+        - !secret justice_telegram_id
+        - !secret ashton_telegram_id
+      title: >-
+        **Home Assitant Calendar Automation**
+      message: >-
+        ```Justice's Calendar  has an event tomorrow! 
+        Called: {{state_attr(cal_entity,'message')}}, \n 
+        All Day: {{state_attr(cal_entity,'all_day')}}, \n
+        Starting at: {{state_attr(cal_entity,'start_time')}},
+        Ending at: {{state_attr(cal_entity,'end_time')}}
+        {% if state_attr(cal_entity, 'location') %}\n  Location:
+        {{ state_attr(cal_entity, 'location') }}\n{% endif
+        %} {% if state_attr(cal_entity, 'description')
+        %}\n  Description: {{ state_attr(cal_entity, 'description')
+        }}\n{% endif %}```
+  mode: single

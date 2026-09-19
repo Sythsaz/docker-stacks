@@ -1,0 +1,11 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+<properties>
+
+    <entry key='config.default'>./conf/default.xml</entry>
+    <entry key='database.driver'>com.mysql.cj.jdbc.Driver</entry>
+    <entry key='database.url'>jdbc:mysql://traccar-db:3306/traccar?allowPublicKeyRetrieval=true&amp;useSSL=false&amp;serverTimezone=UTC&amp;useLocalSessionState=true</entry>
+    <entry key='database.user'>traccar</entry>
+    <entry key='database.password'>${TRACCAR_DB_PASS}</entry>
+
+</properties>

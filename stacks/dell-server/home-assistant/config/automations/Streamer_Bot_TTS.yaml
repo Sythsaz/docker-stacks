@@ -1,0 +1,18 @@
+- id: '1745698054050'
+  alias: Streamer Bot TTS
+  description: ''
+  triggers:
+  - trigger: webhook
+    allowed_methods:
+    - POST
+    - PUT
+    local_only: true
+    webhook_id: !secret streamer_bot_tts_webhook_id
+  conditions: []
+  actions:
+  - action: script.speak_var
+    metadata: {}
+    data:
+      speak_var: '{{ trigger.json.message }}'
+  mode: parallel
+  max: 10

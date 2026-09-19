@@ -1,0 +1,45 @@
+- id: '1742569521945'
+  alias: Streaming Notifications
+  description: ''
+  variables:
+    discord_id: !secret discord_updates_id
+    mastodon_id: !secret mastodon_post_id
+  triggers:
+  - trigger: state
+    entity_id:
+    - sensor.sythsaz
+    from: offline
+    to: streaming
+    id: '01'
+  conditions: []
+  actions:
+  - variables:
+      live: >-
+        I''m now live! Playing {{ trigger.to_state.attributes.game }}, {{ trigger.to_state.attributes.title
+        }}
+  - action: notify.auto_from_ha
+    metadata: {}
+    data:
+      target: variables.discord_id
+      title: Live Notification
+      message: >-
+        {{ live }}
+      data:
+        verify_ssl: true
+        urls:
+          - https://twitch.tv/{{trigger.to_state.attributes.friendly_name }}
+  - action: mastodon.post
+    metadata: {}
+    data:
+      media_warning: false
+      config_entry_id: variables.mastodon_id
+      visibility: public
+      status: >-
+        {{ live }} https://twitch.tv/sythsaz #twitch #streamer #dog #hound
+  - action: notify.sythsaz_twitter
+    metadata: {}
+    data:
+      message: >-
+        {{ live }} #dog #twitch #streamer
+    enabled: false
+  mode: single

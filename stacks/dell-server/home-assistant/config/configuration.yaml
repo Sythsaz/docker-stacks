@@ -1,0 +1,456 @@
+# Loads default set of integrations. Do not remove.    
+default_config:
+homeassistant:
+  allowlist_external_dirs:
+    - /config
+    - /config/pyscript
+    - /config/python_scripts
+    - /config/media
+    - /config/automations
+    - /config/scripts
+    - /config/feedreader
+    - /config/downloads/traccar
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation manual: !include_dir_merge_list automations/
+automation ui: !include automations.yaml
+script manual: !include_dir_merge_named scripts/       
+script ui: !include scripts.yaml
+scene: !include scenes.yaml
+
+#Added In
+
+# Added into UI in 2026.8
+# http:
+  # cors_allowed_origins:
+    # - https://ha.sythsaz.dpdns.org
+    # - https://cast.home-assistant.io
+    # - https://my.home-assistant.io
+    # - http://10.0.20.221:8095
+  # use_x_forwarded_for: true
+  # trusted_proxies:
+    # # Local IPv4
+    # - 127.0.0.1
+    # - 10.0.1.0/24
+    # - 10.0.20.0/24
+    # - 10.0.30.0/24
+    # - 10.0.40.0/24
+    # - 10.0.50.0/24
+    # - 172.16.0.0/12
+    # # Cloudflare IPv4
+    # - 103.21.244.0/22
+    # - 103.22.200.0/22
+    # - 103.31.4.0/22
+    # - 104.16.0.0/13
+    # - 104.24.0.0/14
+    # - 108.162.192.0/18
+    # - 131.0.72.0/22
+    # - 141.101.64.0/18
+    # - 162.158.0.0/15
+    # - 172.64.0.0/13
+    # - 173.245.48.0/20
+    # - 188.114.96.0/20
+    # - 190.93.240.0/20
+    # - 197.234.240.0/22
+    # - 198.41.128.0/17
+    # # Local IPv6
+    # - "::1"
+    # - "fe80::/10"
+    # # Cloudflare IPv6
+    # - "2400:cb00::/32"
+    # - "2606:4700::/32"
+    # - "2803:f800::/32"
+    # - "2405:b500::/32"
+    # - "2405:8100::/32"
+    # - "2a06:98c0::/29"
+    # - "2c0f:f248::/32"
+  # ip_ban_enabled: true
+  # login_attempts_threshold: 10
+
+zha_toolkit:
+
+zha:
+  zigpy_config:
+    ota:
+      extra_providers:
+        - type: z2m
+
+system_health:
+
+recorder:
+  db_url: !secret recorder_db_url
+  purge_keep_days: 30
+  commit_interval: 60
+  exclude:
+    domains:
+      - camera
+      - media_player
+      - weather
+      - sun
+      - update
+      - device_tracker
+      - image
+    event_types:
+      - system_log_event
+    entity_globs:
+      - sensor.sun_solar_*
+      - sensor.opnsense_*_statistics
+      - sensor.*_next_update
+      - sensor.*_distance
+      - sensor.*_throughput*
+      - sensor.desktop_u5e7nrv_*
+      - sensor.asus_sabertooth_*
+      - sensor.amd_radeon_*
+      - sensor.generic_memory_*
+      - sensor.*_fan_*
+      - sensor.icloud3_event_log
+      - event.folder_watcher_*
+      - sensor.ethernet_download_*
+      - sensor.ethernet_upload_*
+      - sensor.*lunar_phase*
+      - sensor.home_sun_*
+      - binary_sensor.home_sun_*
+      - sensor.global_*
+      - sensor.alberta_*
+      - sensor.canada_*
+      - sensor.pycoders_*
+      - sensor.american_*
+      - sensor.home_assistant_intergration_alerts
+      - sensor.streamer_bot_suggestion_ideas
+      - sensor.lethbridge_*
+      - sensor.date_time*
+      - sensor.*_last_seen
+      - sensor.*_uptime
+    entities:
+      - binary_sensor.system_monitor_process_nmap
+      - script.download_a_file_with_retries_2
+      - media_player.living_room_tv
+      - sensor.printer_printer_status
+      - input_text.clock_seconds
+      - sensor.local_time_with_seconds
+      - sensor.global_lethbridge
+      - sensor.global_calgary
+      - sensor.calgary_tech
+      - sensor.syth_iphone_icloud_last_located
+      - sensor.syth_iphone_icloud_last_update
+      - sensor.syth_iphone_icloud_travel_time_hhmm
+      - sensor.syth_ipad_last_located
+      - sensor.syth_ipad_last_update
+      - sensor.syth_ipad_info
+      - sensor.syth_iphone_icloud_info
+      - sensor.pycoders_weekly
+      - sensor.canada_national_news
+      - sensor.sm_g986w_active_notification_count
+      - sensor.steam_wishlist_76561198025675241
+      - sensor.alberta_king_s_printer_legislation_updates
+      - sensor.streamer_bot_suggestion_ideas
+      - sensor.s9_plus_active_notification_count
+      - sensor.dashboard_header_status
+      - sensor.tab_header_status
+      - sensor.active_frontend_user
+      - sensor.syth_iphone_icloud_arrival_time_costco_wholesale
+      - sensor.syth_iphone_icloud_dir_of_travel_costco_wholesale
+      - sensor.syth_iphone_icloud_travel_time_hhmm_costco_wholesale
+      - sensor.syth_iphone_icloud_zone_info_costco_wholesale
+      - sensor.syth_iphone_icloud_arrival_time_superstore
+      - sensor.syth_iphone_icloud_dir_of_travel_superstore
+      - sensor.syth_iphone_icloud_travel_time_hhmm_superstore
+      - sensor.syth_iphone_icloud_zone_info_superstore
+      - sensor.syth_iphone_icloud_arrival_time_the_home_depot_south
+      - sensor.syth_iphone_icloud_dir_of_travel_the_home_depot_south
+      - sensor.syth_iphone_icloud_travel_time_hhmm_the_home_depot_south
+      - sensor.syth_iphone_icloud_zone_info_the_home_depot_south
+      - sensor.syth_iphone_icloud_arrival_time_wallmart_north
+      - sensor.syth_iphone_icloud_dir_of_travel_wallmart_north
+      - sensor.syth_iphone_icloud_travel_time_hhmm_wallmart_north
+      - sensor.syth_iphone_icloud_zone_info_wallmart_north
+      - sensor.syth_iphone_icloud_arrival_time_wallmart_south
+      - sensor.syth_iphone_icloud_dir_of_travel_wallmart_south
+      - sensor.syth_iphone_icloud_travel_time_hhmm_wallmart_south
+      - sensor.syth_iphone_icloud_zone_info_wallmart_south
+      - sensor.syth_iphone_icloud_arrival_time_home
+      - sensor.syth_iphone_icloud_dir_of_travel_home
+      - sensor.syth_iphone_icloud_travel_time_hhmm_home
+      - sensor.syth_iphone_icloud_zone_info_home
+      - sensor.uptime
+
+# zone:
+  # - name: Home
+    # radius: 10
+    # icon: mdi:account-multiple
+
+device_tracker:
+  # - platform: bluetooth_le_tracker
+    # track_new_devices: false
+    # track_battery: true
+    # track_battery_interval: 01:00:00
+
+logger:
+  default: warning
+  logs:
+    custom_components.pyscript: info
+    homeassistant.components.template: info
+    homeassistant.components.automation: error
+    homeassistant.components.script: error
+system_log:
+  fire_event: true
+mqtt_statestream:
+  publish_attributes: false
+  publish_timestamps: false
+  base_topic: homeassistant
+  exclude:
+    domains:
+      - device_tracker
+      - person
+      - zone
+      - sun
+    entity_globs:
+      - sensor.opnsense_*_statistics
+      - sensor.*_next_update
+      - sensor.*_distance
+      - sensor.*_throughput*
+      - sensor.desktop_u5e7nrv_*
+      - sensor.asus_sabertooth_*
+      - sensor.amd_radeon_*
+      - sensor.generic_memory_*
+      - sensor.*_fan_*
+      - sensor.icloud3_event_log
+      - event.folder_watcher_*
+      - sensor.ethernet_download_*
+      - sensor.ethernet_upload_*
+      - sensor.*lunar_phase*
+      - sensor.home_sun_*
+      - binary_sensor.home_sun_*
+    entities:
+      - media_player.living_room_tv
+      - sensor.printer_printer_status
+      - input_text.clock_seconds
+      - sensor.local_time_with_seconds
+      - sensor.sun_next_dawn
+      - sensor.sun_next_dusk
+      - sensor.sun_next_midnight
+      - sensor.sun_next_noon
+      - sensor.sun_next_setting
+      - sensor.sun_next_rising
+
+# notify:
+  # - name: sythsaz_twitter
+    # platform: twitter
+    # consumer_key: !secret twitter_consumer_key
+    # consumer_secret: !secret twitter_consumer_secret
+    # access_token: !secret twitter_access_token
+    # access_token_secret: !secret twitter_access_token_secret
+    # username: Sythsaz
+
+rest_command:
+  # twitter_laptop:
+      # url: !secret twitter_laptop_url
+      # method: POST
+      # headers:
+          # Content-Type: "application/json"
+      # payload: '{"message": "{{ message }}"}'
+      # content_type: "application/json"
+      # timeout: 30
+
+  send_whatsapp_message:
+      url: !secret send_whatsapp_message_url
+      method: post
+      headers:
+          content-type: "application/json"
+      payload: '{"command":"sendMessage","params":["{{ chat_id }}", "{{ message }}"]}'
+
+python_script:
+
+pyscript:
+  allow_all_imports: true
+  requirements:
+    - PyJWT
+  apps:
+    wordpress_publisher:
+      wp_url: "https://sythsaz.ca/wp-json/wp/v2/posts"
+      wp_user: !secret wp_api_username
+      wp_pass: !secret wp_api_password
+
+template:
+  - trigger:
+      - platform: event
+        event_type: imap_content
+        event_data:
+          username: !secret event_imap_username_ash
+          sender: !secret event_imap_sender
+    sensor:
+      - name: !secret event_imap_sensor_name_ash
+        state: "{{ trigger.event.data.subject }}"
+        attributes:
+          from_address: "{{ trigger.event.data.sender }}"
+          received_at: "{{ trigger.event.data.date }}"
+          email_body: "{{ trigger.event.data.text }}"
+      - name: "Latest Twitch Follower"
+        unique_id: twitch_follower_detailed
+        icon: mdi:twitch
+        state: >
+          {% set subject = trigger.event.data.subject %}
+          {% set sender = trigger.event.data.sender %}
+          {% if 'is now following you on Twitch' in subject and 'no-reply@twitch.tv' in sender %}
+            {{ subject | replace(' is now following you on Twitch', '') }}
+          {% else %}
+            {{ this.state if this.state is defined else 'Unknown' }}
+          {% endif %}
+        attributes:
+          received_at: "{{ trigger.event.data.date }}"
+          full_subject: "{{ trigger.event.data.subject }}"
+          profile_url: >
+            {% set name = trigger.event.data.subject | replace(' is now following you on Twitch', '') %}
+            https://www.twitch.tv/{{ name | trim | lower }}
+          message_preview: "{{ trigger.event.data.text[:255] if trigger.event.data.text is defined else 'N/A' }}"
+      - name: "Dashboard User Activity"
+        unique_id: dashboard_user_activity
+        icon: mdi:monitor-dashboard
+        device_class: timestamp
+        state: >
+          {% set browser_sensors = states.sensor | selectattr('entity_id', 'search', '_browser_user') | list %}
+          {% set active_sensors = browser_sensors | rejectattr('state', 'in', ['unknown', 'unavailable']) | list %}
+          {{ active_sensors | map(attribute='last_updated') | list | sort | last | default(now()) }}
+        attributes:
+          active_count: >
+            {% set browser_sensors = states.sensor | selectattr('entity_id', 'search', '_browser_user') | list %}
+            {{ browser_sensors | rejectattr('state', 'in', ['unknown', 'unavailable']) | list | count }}
+          is_active: >
+            {% set browser_sensors = states.sensor | selectattr('entity_id', 'search', '_browser_user') | list %}
+            {{ (browser_sensors | rejectattr('state', 'in', ['unknown', 'unavailable']) | list | count) > 0 }}
+
+  - trigger:
+      - platform: event
+        event_type: imap_content
+        event_data:
+          username: !secret event_imap_username_kit
+          sender: !secret event_imap_sender
+    sensor:
+      - name: !secret event_imap_sensor_name_kit
+        state: "{{ trigger.event.data.subject }}"
+        attributes:
+          from_address: "{{ trigger.event.data.sender }}"
+          received_at: "{{ trigger.event.data.date }}"
+          email_body: "{{ trigger.event.data.text }}"
+
+shell_command:
+    create_gif_hwy3: !secret create_gif_hwy3_cmd
+    create_gif_wude: !secret create_gif_wude_cmd
+    create_gif_wudw: !secret create_gif_wudw_cmd
+    create_gif_wude4: !secret create_gif_wude4_cmd
+    create_gif_wudw2: !secret create_gif_wudw2_cmd
+    apt_update_check: !secret apt_update_check
+    apt_perform_upgrade: !secret apt_perform_upgrade
+    ha_send_sensor: !secret send_data_to_wp
+    ha_send_radar: !secret send_radar_to_wp
+    export_traccar_route: >
+      curl -k -s -H "Authorization: Bearer {{ token }}" -G "{{ url }}/api/reports/route/xlsx" --data-urlencode "deviceId={{ device_id }}" --data-urlencode "from={{ from_time }}" --data-urlencode "to={{ to_time }}" -o "/config/downloads/traccar/route_{{ device_id }}_{{ date_str }}.xlsx"
+    gfs_backup_weekly: !secret gfs_backup_weekly
+    gfs_backup_monthly: !secret gfs_backup_monthly
+sensor:
+  - platform: feedparser
+    name: Global Calgary
+    feed_url: https://globalnews.ca/calgary/feed/
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Global Lethbridge
+    feed_url: https://globalnews.ca/lethbridge/feed/
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Alberta Electric System Operator
+    feed_url: https://www.aeso.ca/rss/grid-alert
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Canadian Agricultural Partnership Alberta News
+    feed_url: https://cap.alberta.ca/app21/rss/news?audience=0
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Alberta Emergency Alert
+    feed_url: https://www.alberta.ca/data/aea/rss/feed-full.atom
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Alberta King's Printer, All Legislative Publications
+    feed_url: https://kings-printer.alberta.ca/rss/RSS_QP_LEG_PUB_ALL.xml
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Alberta King's Printer, Legislation Updates
+    feed_url: https://kings-printer.alberta.ca/rss/RSS_QP_ALL.xml
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Calgary Tech
+    feed_url: https://calgary.tech/feed/
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Lethbridge - Weather Alert - Environment Canada
+    feed_url: https://weather.gc.ca/rss/battleboard/abrm78_e.xml
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Canada - National News
+    feed_url: https://api.io.canada.ca/io-server/gc/news/en/v2?sort=publishedDate&orderBy=desc&publishedDate%3E=2021-10-25&pick=100&format=atom&atomtitle=National%20News
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: PyCoders Weekly
+    feed_url: https://pycoders.com/feed/yhR8L4fF
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: American Psychological Association News
+    feed_url: https://www.apa.org/rss
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Home Assistant Intergration Alerts
+    feed_url: https://alerts.home-assistant.io/feed.xml
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+  - platform: feedparser
+    name: Streamer Bot Suggestion & Ideas
+    feed_url: https://ideas.streamer.bot/feed/global.atom
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+command_line:
+  - sensor:
+      name: HA DB Size
+      command: 'ssh -i /config/.ssh/id_rsa -o StrictHostKeyChecking=no hassio@10.0.20.221 "du -sh /config/home-assistant_v2.db | cut -f1"'
+      scan_interval: 3600  # Hourly

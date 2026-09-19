@@ -1,0 +1,28 @@
+- id: '1729830487120'
+  alias: Waste Reminders (next_waste_collection)
+  description: ''
+  trigger:
+    - platform: time
+      at: '10:00:00'
+    - platform: time
+      at: '12:00:00'
+    - platform: time
+      at: '18:00:00'
+    - platform: time
+      at: '22:00:00'
+  condition:
+    - condition: state
+      entity_id: calendar.city_of_lethbridge_waste
+      state: 'on'
+  action:
+    - service: script.send_message_telegram_2
+      data:
+        message_target: !secret ashton_telegram_id
+        message: >-
+          {{ states('sensor.next_waste_collection') }}
+    - service: script.speak_var
+      data:
+        cache: false
+        speak_var: >-
+          {{ states('sensor.next_waste_collection') }}
+  mode: single

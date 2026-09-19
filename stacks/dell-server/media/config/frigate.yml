@@ -1,0 +1,692 @@
+mqtt:
+  enabled: true
+  topic_prefix: frigate
+  host: 10.0.20.171
+  port: 1883
+  user: zashtys
+  password: "{FRIGATE_MQTT_PASSWORD}"
+  stats_interval: 15
+logger:
+  logs:
+    detector.ov: debug
+    frigate.object_detection.base: debug
+    frigate.genai: debug
+    frigate.mqtt: debug
+genai:
+  default:
+    provider: gemini
+    api_key: "{FRIGATE_GENAI_API_KEY}"
+    model: gemini-2.5-flash
+    roles:
+      - descriptions
+      - chat
+review:
+  genai:
+    enabled: true
+    alerts: true
+    detections: true
+    image_source: recordings
+    additional_concerns:
+      - animals that are not Harley, the dog who lives here
+      - people throwing trash on the ground
+      - cats walking through/loitering
+      - birds loitering/interacting with trash
+      - people visibly peeking over the fence into the backyard
+    activity_context_prompt: "### Normal Activity Indicators (Level 0)\n- Known/verified
+      people in any zone at any time\n- People with pets in any area\n- Deliveries
+      or services during daytime/evening (9 AM - 6 PM): carrying packages to doors/porches,
+      placing items, leaving\n- Services/maintenance workers with visible tools, uniforms,
+      or service vehicles during daytime\n- Activity confined to public areas only
+      (sidewalks, streets, alley) without entering property at any time\n\n### Suspicious
+      Activity Indicators (Level 1)\n- **Testing or attempting to open doors/windows/handles
+      on vehicles or buildings** — ALWAYS Level 1 regardless of time or duration\n\
+      - **Unidentified person in private areas ( near vehicles/buildings, in the Backyard
+      Parking Pad) during late night/early morning (11 PM - 5 AM)** — ALWAYS Level
+      1 regardless of activity or duration\n- Taking items that don't belong to them
+      (packages, objects from porches/driveways)\n- Climbing or jumping fences/barriers
+      to access property\n- Attempting to conceal actions or items from view\n- Prolonged
+      loitering: remaining in the same area without a visible purpose throughout most
+      of the sequence\n\n### Critical Threat Indicators (Level 2)\n- Holding break-in
+      tools (crowbars, pry bars, bolt cutters, etc.)\n- Weapons visible (guns, knives,
+      baseball bats used aggressively, etc.)\n- Forced entry in progress\n- Physical
+      aggression or violence\n- Active property damage or theft in progress\n- Harley
+      leaving without a person\n\n### Assessment Guidance\nEvaluate in this order:\n\
+      \n1. **If person is verified/known** → Level 0 regardless of time or activity\n\
+      2. **If person is unidentified:**\n- Check time: If late night/early morning
+      (9 PM - 6 AM) AND in private areas (driveways, near vehicles/buildings, main
+      Backyard Zone) → Level 1\n- Check actions: If testing doors/handles, taking
+      items, climbing → Level 1\n- Otherwise, if daytime/evening (9 AM - 6 PM) with
+      a clear legitimate purpose (delivery, service worker) → Level 0\n3. **Escalate
+      to Level 2 if:** Any kind of weapons, break-in tools, forced entry in progress,
+      violence, active property damage visible, if Harley leaves through the fence
+      gate without any person (escalates from Level 0 or 1)\n\nThe mere presence of
+      an unidentified person in private areas during late-night hours is inherently
+      suspicious and warrants human review, regardless of what activity they appear
+      to be doing or how brief the sequence is.\n\nSTRICT REQUIREMENT: Provide the
+      response ONLY as a raw, valid JSON object. Do not include markdown formatting,
+      conversational text, or code blocks.\n"
+  alerts:
+    labels:
+      - person
+      - car
+      - cat
+      - dog
+      - backpack
+      - frisbee
+      - bird
+    cutoff_time: 80
+  detections:
+    labels:
+      - car
+      - cat
+      - dog
+      - person
+      - backpack
+      - frisbee
+      - bird
+    cutoff_time: 80
+objects:
+  genai:
+    enabled: true
+    prompt: "Analyze the {label} in these images from the {camera} security camera.
+      Focus on the actions, behaviour, and potential intent of the {label}, rather
+      than just describing its appearance, but don't skip describing its appearance
+      entirely.\nThe Backyard Camera has older infared night vision, so at night the
+      image is greyscale instead of color during the day. People/Objects may be moving
+      slowly, frame by frame movement may appear nearly stationary, but actually is
+      slightly moving.\n\n### Spatial Context for this Camera:\n- Backyard: The main
+      grass area in the view. There is a table, umbrella, and 0-4 chairs that don't
+      need to be mentioned unless involved in a Level 1 or 2 Alert. \n- Back_Alley:
+      The public alley access road going across the right and left near the top behind
+      the fence.\n- Parking_Pad: The car parking spot, in between the Backyard and
+      Alley, just outside of the fence gate.\n- Neighbours_Yard: Any backyard that
+      is not the main backyard or the alley. These normally have a motion mask enabled
+      unless the whole area needs to be monitored.\n"
+    object_prompts:
+      person: "Examine the main person in these images. What are they doing and what
+        might their actions suggest about their intent (e.g., approaching a door,
+        leaving an area, standing still)? Do not describe the surroundings or static
+        details.\nIf the person is recognized via {sub_label} as Ashton (owner/operator),
+        Kit (common-law partner), Tristan (friend), or Jeff (friend), note their presence
+        as normal and verified.\n"
+      car: "Observe the primary vehicle in these images. Focus on its movement, direction,
+        or purpose (e.g., parking, approaching, circling). If it's a delivery vehicle,
+        mention the company.\n"
+      cat: "Observe the cat in these images. Focus on its movement and intent (e.g.,
+        wandering, hunting, interacting with objects). If the cat is engaging in any
+        specific actions, mention it.\n"
+      dog: "Observe the dog in these images. Focus on its movement and intent (e.g.,
+        running, hunting, digging (digging spots are all in the Backyard; he usually
+        prefers digging in corners), barking). \nIf the dog is recognized via {sub_label}
+        as Harley, see if he is digging or barking at other animals. Harley interacting
+        with people other than Ashton, Kit, Jeff, or Tristan is abnormal and should
+        be immediately investigated.\n"
+    objects:
+      - cat
+      - dog
+      - person
+      - frisbee
+      - car
+      - backpack
+      - bird
+    use_snapshot: true
+    send_triggers:
+      after_significant_updates: 2
+  track:
+    - backpack
+    - car
+    - cat
+    - dog
+    - frisbee
+    - person
+    - bird
+  filters:
+    person:
+      threshold: 0.82
+    bird:
+      max_area: 50000
+      threshold: 0.8
+    backpack:
+      min_score: 0.8
+      threshold: 0.8
+    car:
+      threshold: 0.8
+    cat:
+      threshold: 0.8
+    dog:
+      threshold: 0.8
+      min_ratio: 1.5
+    frisbee:
+      threshold: 0.8
+ffmpeg:
+  hwaccel_args: preset-vaapi
+snapshots:
+  enabled: true
+  timestamp: true
+  bounding_box: true
+  retain:
+    default: 30
+  quality: 80
+record:
+  enabled: true
+  alerts:
+    retain:
+      days: 30
+      mode: all
+    pre_capture: 30
+  detections:
+    pre_capture: 30
+    post_capture: 15
+    retain:
+      days: 30
+      mode: all
+  continuous:
+    days: 3
+  motion:
+    days: 7
+  export:
+    max_concurrent: 1
+  preview:
+    quality: very_high
+detect:
+  enabled: true
+  min_initialized: 5
+  max_disappeared: 70
+  stationary:
+    interval: 25
+    threshold: 25
+  width: 1280
+  height: 720
+  fps: 5
+audio:
+  enabled: true
+  listen:
+    - scream
+    - yell
+    - smoke_detector
+    - glass
+    - shatter
+    - breaking
+    - cat
+    - fireworks
+    - gunshot
+    - honk
+    - machine_gun
+    - meow
+    - siren
+    - smash
+    - thunderstorm
+    - ambulance
+  filters:
+    bark:
+      threshold: 0.85
+    alarm:
+      threshold: 0.85
+    ambulance:
+      threshold: 0.85
+    boom:
+      threshold: 0.85
+    breaking:
+      threshold: 0.85
+    cat:
+      threshold: 0.85
+    civil_defense_siren:
+      threshold: 0.85
+    eruption:
+      threshold: 0.85
+    explosion:
+      threshold: 0.85
+    fire:
+      threshold: 0.85
+    fire_alarm:
+      threshold: 0.85
+    fire_engine:
+      threshold: 0.85
+    firecracker:
+      threshold: 0.85
+    fireworks:
+      threshold: 0.85
+    glass:
+      threshold: 0.85
+    gunshot:
+      threshold: 0.85
+    honk:
+      threshold: 0.85
+    machine_gun:
+      threshold: 0.85
+    meow:
+      threshold: 0.85
+    scream:
+      threshold: 0.85
+    shatter:
+      threshold: 0.85
+    siren:
+      threshold: 0.85
+    smash:
+      threshold: 0.85
+    smoke_detector:
+      threshold: 0.85
+    thunderstorm:
+      threshold: 0.85
+    yell:
+      threshold: 0.85
+go2rtc:
+  ffmpeg:
+    global: -vaapi_device /dev/dri/renderD128   # Forces FFmpeg 8 to use your Intel iGPU for transcoding
+  webrtc:
+    candidates:
+      - 10.0.20.25:8555
+      - stun:8555
+  streams:
+    # 1. The WebRTC Stream (For the UI and Mic Button): Keeps the Opus speaker track intact
+    backyard_camera_hq:
+      - rtsp://admin:023415@10.0.40.103:554/live/profile.0#tcp
+
+    # 2. The FFmpeg Stream (For Recording): Drops the Opus track to prevent FFmpeg from crashing
+    backyard_camera_hq_ffmpeg:
+      - rtsp://admin:023415@10.0.40.103:554/live/profile.0#tcp#video=h264#audio=aac
+
+    # LQ Stream: Force TCP, grab H264 video, completely drop all audio
+    backyard_camera_lq:
+      - rtsp://admin:023415@10.0.40.103:554/live/profile.1#tcp#video=h264
+
+cameras:
+  backyard_camera_hq:
+    enabled: true
+    ffmpeg:
+      hwaccel_args: preset-vaapi
+      output_args:
+        record: preset-record-generic-audio-copy
+      inputs:
+        # HQ Input: Point this to the scrubbed "_ffmpeg" stream so it doesn't crash!
+        - path: rtsp://127.0.0.1:8554/backyard_camera_hq_ffmpeg
+          input_args: preset-rtsp-restream
+          roles:
+            - record
+            - audio
+
+        # LQ Input: Feeds the detection engine
+        - path: rtsp://127.0.0.1:8554/backyard_camera_lq
+          input_args: preset-rtsp-restream
+          roles:
+            - detect
+
+    # Optional ONVIF block (You can leave this here, Frigate will just ignore the PTZ error)
+    onvif:
+      ignore_time_mismatch: false
+
+      tls_insecure: true
+      autotracking:
+        track: []
+    live:
+      streams:
+        High Quality: backyard_camera_hq
+        Low Quality: backyard_camera_lq
+      quality: 1
+    zones:
+      Backyard:
+        coordinates: 
+          0.215,0.337,0.36,0.323,0.504,0.333,0.507,0.211,0.597,0.218,0.657,0.312,0.733,0.485,0.799,0.688,0.842,0.918,0.858,1,0,1,0,0.746,0.1,0.541,0.146,0.442,0.166,0.394
+        loitering_time: 2
+        inertia: 2
+      Back_Alley:
+        coordinates: 
+          0.126,0.131,0.27,0.068,0.384,0.05,0.453,0.052,0.472,0.018,0.559,0.033,0.731,0.085,0.696,0.159,0.679,0.161,0.603,0.104,0.555,0.075,0.507,0.1,0.494,0.168,0.36,0.169,0.356,0.089,0.345,0.092,0.271,0.137,0.201,0.172,0.138,0.181
+        loitering_time: 2
+        inertia: 3
+      Parking_Pad:
+        coordinates: 0.489,0.307,0.498,0.204,0.313,0.208,0.241,0.308
+        loitering_time: 2
+        inertia: 2
+      Backyard_Fence:
+        coordinates: 
+          0,0.416,0.059,0.335,0.182,0.189,0.249,0.152,0.309,0.115,0.354,0.094,0.355,0.167,0.328,0.178,0.313,0.182,0.496,0.173,0.509,0.098,0.551,0.086,0.605,0.102,0.683,0.169,0.88,0.411,1,0.682,1,1,0.861,1,0.8,0.695,0.721,0.456,0.661,0.318,0.6,0.214,0.508,0.206,0.501,0.332,0.442,0.329,0.356,0.323,0.217,0.334,0.234,0.309,0.489,0.308,0.497,0.198,0.312,0.205,0.235,0.308,0.218,0.335,0.163,0.398,0.093,0.552,0,0.742,0,0.606
+        loitering_time: 2
+        inertia: 2
+      Alley_Speed:
+        coordinates: 0.357,0.195,0.384,0.108,0.505,0.104,0.502,0.195
+        speed_threshold: 1
+        distances: 4,4,4,4
+        inertia: 2
+        loitering_time: 0
+    motion:
+      enabled: true
+      mask:
+        b-r-tree:
+          friendly_name: B-R-Tree
+          enabled: true
+          coordinates: 
+            0.969,0.605,0.908,0.692,0.865,0.787,0.889,0.843,0.915,0.884,0.94,0.937,0.957,1,1,1,1,0.611
+        umbrella:
+          friendly_name: Umbrella
+          enabled: true
+          coordinates: 
+            0.628,0.184,0.601,0.245,0.614,0.285,0.609,0.312,0.607,0.392,0.595,0.455,0.59,0.484,0.6,0.536,0.627,0.535,0.663,0.501,0.647,0.433,0.641,0.381,0.649,0.324,0.653,0.27,0.651,0.194
+        top-right:
+          friendly_name: Top-Right
+          enabled: true
+          coordinates: 
+            0.587,0.046,0.731,0.087,0.689,0.169,0.746,0.236,0.806,0.311,0.882,0.408,1,0.68,1,0.55,1,0,0.924,0,0.589,0
+        top-left:
+          friendly_name: Top-Left
+          enabled: true
+          coordinates: 
+            0.147,0.225,0.21,0.172,0.137,0.186,0.124,0.13,0.269,0.067,0.383,0.051,0.455,0.052,0.455,0.042,0.474,0.018,0.562,0.034,0.593,0.047,0.592,0,0.462,0,0.267,0,0.114,0,0,0,0,0.241,0,0.42,0.052,0.332
+        laundry-line:
+          friendly_name: Laundry-Line
+          enabled: true
+          coordinates: 
+            0.328,0.198,0.338,0.276,0.272,0.329,0.207,0.356,0.154,0.357,0.115,0.356,0.111,0.296,0.149,0.287,0.189,0.285,0.215,0.271,0.243,0.259,0.275,0.24,0.299,0.214
+      threshold: 33
+      contour_area: 10
+      improve_contrast: true
+    review:
+      alerts:
+        required_zones:
+          - Backyard
+          - Alley_Speed
+          - Parking_Pad
+          - Back_Alley
+          - Backyard_Fence
+        labels:
+          - alarm
+          - ambulance
+          - animal
+          - backpack
+          - bark
+          - bird
+          - breaking
+          - car
+          - car_alarm
+          - cat
+          - dog
+          - dogs
+          - fire_alarm
+          - fireworks
+          - frisbee
+          - glass
+          - gunshot
+          - honk
+          - meow
+          - person
+          - pets
+          - scream
+          - shatter
+          - siren
+          - smash
+          - smoke_detector
+          - whimper_dog
+          - yell
+      detections:
+        labels:
+          - alarm
+          - ambulance
+          - animal
+          - backpack
+          - bark
+          - bird
+          - breaking
+          - car
+          - car_alarm
+          - cat
+          - dog
+          - dogs
+          - fire_alarm
+          - fireworks
+          - frisbee
+          - glass
+          - gunshot
+          - honk
+          - meow
+          - person
+          - pets
+          - scream
+          - shatter
+          - siren
+          - smash
+          - smoke_detector
+          - whimper_dog
+          - yell
+    semantic_search:
+      triggers: {}
+    notifications:
+      enabled: true
+    mqtt:
+      required_zones:
+        - Back_Alley
+        - Backyard
+        - Parking_Pad
+        - Alley_Speed
+        - Backyard_Fence
+      height: 1080
+      quality: 100
+    timestamp_style:
+      thickness: 3
+    objects:
+      mask:
+        bottom-chair:
+          friendly_name: Bottom-Chair
+          enabled: true
+          coordinates: 
+            0.489,0.709,0.455,0.768,0.46,0.801,0.475,0.821,0.468,0.854,0.462,0.881,0.52,0.935,0.564,0.845,0.567,0.775
+        bikes:
+          friendly_name: bikes
+          enabled: true
+          coordinates: 
+            0.623,0.149,0.589,0.173,0.582,0.204,0.58,0.225,0.59,0.258,0.601,0.267,0.607,0.244,0.616,0.226,0.623,0.198,0.628,0.184
+      filters:
+        person:
+          mask:
+            water-drain:
+              friendly_name: water-drain
+              enabled: true
+              coordinates: 
+                0.089,0.718,0.102,0.712,0.108,0.76,0.099,0.784,0.082,0.774,0.092,0.748
+        car:
+          mask:
+            shed:
+              friendly_name: Shed
+              enabled: true
+              coordinates: 0.507,0.101,0.606,0.11,0.664,0.33,0.499,0.332
+semantic_search:
+  enabled: true
+  model_size: small
+face_recognition:
+  enabled: false
+  model_size: small
+lpr:
+  enabled: false
+audio_transcription:
+  enabled: false
+  device: GPU
+  model_size: small
+  language: en
+classification:
+  bird:
+    enabled: true
+    threshold: 0.8
+  custom:
+    Gate Status:
+      enabled: true
+      name: Gate Status
+      threshold: 0.8
+      state_config:
+        cameras:
+          backyard_camera_hq:
+            crop:
+              - 0.3957750553117127
+              - 0.16534244782585092
+              - 0.5048388433170206
+              - 0.3592336265019536
+        motion: true
+      save_attempts: 200
+    Harley:
+      enabled: true
+      name: Harley
+      threshold: 0.8
+      object_config:
+        objects:
+          - dog
+        classification_type: sub_label
+      save_attempts: 400
+    Kit:
+      enabled: true
+      name: Kit
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+      save_attempts: 400
+    Ashton:
+      enabled: true
+      name: Ashton
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+      save_attempts: 400
+    Upstairs Guy:
+      enabled: true
+      name: Upstairs Guy
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+      save_attempts: 400
+    Shed Door:
+      enabled: true
+      name: Shed Door
+      threshold: 0.8
+      state_config:
+        cameras:
+          backyard_camera_hq:
+            crop:
+              - 0.5214655060531705
+              - 0.11096837692983653
+              - 0.5951358420291408
+              - 0.24193786310933924
+        motion: true
+      save_attempts: 200
+    Jeff:
+      enabled: true
+      name: Jeff
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+      save_attempts: 400
+    Dog Lead:
+      enabled: true
+      name: Dog Lead
+      threshold: 0.8
+      object_config:
+        objects:
+          - dog
+        classification_type: attribute
+      save_attempts: 400
+    Recycling Bin:
+      enabled: true
+      name: Recycling Bin
+      threshold: 0.8
+      state_config:
+        cameras:
+          backyard_camera_hq:
+            crop:
+              - 0.42000758033622193
+              - 0.10271696070292337
+              - 0.4692942021216389
+              - 0.1903376216547758
+        motion: true
+      save_attempts: 200
+    Bryan:
+      enabled: true
+      name: Bryan
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+      save_attempts: 400
+    Bryan's Truck:
+      enabled: true
+      name: Bryan's Truck
+      threshold: 0.8
+      object_config:
+        objects:
+          - car
+        classification_type: sub_label
+    Big Backpack:
+      enabled: true
+      name: Big Backpack
+      threshold: 0.8
+      object_config:
+        objects:
+          - backpack
+        classification_type: sub_label
+    Sherry:
+      enabled: true
+      name: Sherry
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+    Shelly:
+      enabled: true
+      name: Shelly
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+    Upstairs Lady:
+      enabled: true
+      name: Upstairs Lady
+      threshold: 0.8
+      object_config:
+        objects:
+          - person
+        classification_type: sub_label
+    Sherry & Shelly's Van:
+      enabled: true
+      name: Sherry & Shelly's Van
+      threshold: 0.8
+      object_config:
+        objects:
+          - car
+        classification_type: sub_label
+version: 0.18-0
+notifications:
+  enabled: true
+  email: "{FRIGATE_NOTIFICATION_EMAIL}"
+auth:
+  cookie_secure: true
+networking:
+  ipv6:
+    enabled: true
+telemetry:
+  stats:
+    network_bandwidth: true
+profiles:
+  away:
+    friendly_name: Away
+  home:
+    friendly_name: Home
+detectors:
+  openvino:
+    type: openvino
+    device: AUTO
+model:
+  labelmap_path: /openvino-model/coco_91cl_bkgr.txt
+  width: 300
+  height: 300
+  input_tensor: nhwc
+  input_pixel_format: bgr
+  input_dtype: int
+  model_type: ssd
+live:
+  quality: 1

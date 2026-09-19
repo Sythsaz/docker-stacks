@@ -1,0 +1,4 @@
+FROM aquasec/trivy:latest
+
+# Install tools required for querying the Docker proxy and parsing JSON
+RUN apk update && apk add --no-cache curl jq bash

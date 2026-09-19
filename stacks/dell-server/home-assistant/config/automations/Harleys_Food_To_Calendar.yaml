@@ -1,0 +1,37 @@
+- id: '1749146764929'
+  alias: Harley's Food Order To Google Calendar
+  description: ''
+  variables:
+    vet_addr: !secret vet_address
+    vet_email: !secret vet_reply_email_sensor_id
+    google_cal: !secret personal_google_calendar_reminder_entity
+
+  trigger:
+    # 1) start when YOU press the button
+    - platform: state
+      entity_id: input_button.send_email_for_harley_s_food_renewal
+      to: 'pressed'
+
+  action:
+    # 2) wait up to 3 days for the vet email sensor to change
+    - wait_for_trigger:
+        - platform: state
+          entity_id: !secret vet_reply_email_sensor_id
+      timeout: '259200'   # 3 days in seconds
+      continue_on_timeout: false
+
+    # 3) once the email comes in, make one calendar event
+    - service: calendar.create_event
+      target:
+        entity_id: "{{ google_cal }}"
+      data:
+        summary: "Harley's Food Email Came In"
+        start_date: >
+          {{ now().strftime('%Y-%m-%d') }}
+        end_date: >
+          {{ (now() + timedelta(days=1)).strftime('%Y-%m-%d') }}
+        location: "{{ vet_addr }}"
+        description: >
+          {{ state_attr(vet_email, 'email_body') | default(state_attr(vet_email, 'text','')) }}
+
+  mode: single

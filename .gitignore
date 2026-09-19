@@ -1,0 +1,51 @@
+# Data Directories
+# Ignore bind mount data
+**/data/
+
+# Secrets
+# Ignore decrypted secrets in secrets directories (keep encrypted .enc)
+**/secrets/*
+!**/secrets/*.enc
+
+# Environment Variables
+# Ignore .env files
+.env
+.env.*
+!.env.example
+
+# Key Material
+*.key
+*.pem
+*.cert
+*.crt
+*.p12
+
+# Runtime & Temp Files
+*.tmp
+*.temp
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db
+/scratch/
+
+# Docker
+# Ignore Docker build cache
+.docker-build/
+
+# Do NOT ignore compose files (implicit since they aren't matched by rules above, but good to note)
+!**/compose.yaml
+!**/compose.yml
+
+!**/secrets/
+# Infisical
+.infisical.json
+.infisical-machine.env
+*.env
+
+# Gemini Symlink
+scripts/VaultOp.ps1
+
+# Secrets files
+secrets.yaml

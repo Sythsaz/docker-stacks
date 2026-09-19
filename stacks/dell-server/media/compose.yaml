@@ -1,0 +1,224 @@
+x-logging:
+  logging: &id001
+    driver: json-file
+    options:
+      max-size: 50m
+      max-file: '3'
+      tag: '{{.Name}}/{{.ID}}'
+services:
+  plex:
+    logging: *id001
+    image: linuxserver/plex:latest
+    container_name: plex
+    mac_address: 02:42:0a:00:14:1b
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.27
+    volumes:
+      - /home/hassio/home_assistant/plex_config:/config
+      - /mnt/externals/LB/Movies:/LB/Movies:ro
+      - /mnt/externals/LB/Music:/LB/Music:ro
+      - /mnt/externals/LB/Shows:/LB/Shows:ro
+      - /mnt/externals/SB/Anime:/SB/Anime:ro
+      - /mnt/externals/SB/Movies:/SB/Movies:ro
+      - /mnt/externals/SB/Music:/SB/Music:ro
+      - /mnt/externals/SB/Shows:/SB/Shows:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - LIBVA_DRIVER_NAME=r600
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -fsS
+        - http://localhost:32400/identity
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
+          cpus: '2.5'
+        reservations:
+          memory: 1024M
+          cpus: '0.5'
+  frigate:
+    logging: *id001
+    image: ghcr.io/blakeblackshear/frigate:0.18.0-rc2
+    container_name: frigate
+    mac_address: 02:42:0a:00:14:19
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.25
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - PERFMON
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - FOWNER
+      - NET_ADMIN
+      - NET_RAW
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /tmp/cache:rw,noexec,nosuid,size=512m
+      - /run:rw,exec,nosuid,size=64m
+      - /dev/shm:rw,exec,nosuid,size=1g
+      - /var/lib/nginx:rw,noexec,nosuid,size=64m
+      - /var/log/nginx:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/hassio/home_assistant/frigate_config:/config
+      - ./config/frigate.yml:/config/config.yml:ro
+      - /mnt/externals/LB/frigate:/media
+      - /etc/localtime:/etc/localtime:ro
+    devices:
+      - /dev/dri/renderD128:/dev/dri/renderD128
+    group_add:
+      - '105'
+    restart: unless-stopped
+    environment:
+      FRIGATE_RTSP_PASSWORD: ${RTSP_PASSWORD}
+      FRIGATE_GENAI_API_KEY: ${FRIGATE_GENAI_API_KEY}
+      FRIGATE_MQTT_PASSWORD: ${FRIGATE_MQTT_PASSWORD}
+      FRIGATE_NOTIFICATION_EMAIL: ${FRIGATE_NOTIFICATION_EMAIL}
+      PUID: '1000'
+      PGID: '1000'
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - -fsS
+        - http://localhost:5000/api/version
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 4096M
+          cpus: '2.5'
+  music_assistant:
+    logging: *id001
+    image: ghcr.io/music-assistant/server:latest
+    container_name: music_assistant
+    mac_address: 02:42:0a:00:14:1c
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.28
+    volumes:
+      - /home/hassio/home_assistant/music_config:/data
+      - /mnt/externals/LB/Music:/media:ro
+    environment:
+      - PUID=1000
+      - PGID=1000
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://localhost:8095/
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+  aircast:
+    logging: *id001
+    image: 1activegeek/airconnect:latest
+    container_name: aircast
+    mac_address: 02:42:0a:00:14:1d
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.29
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,exec,nosuid,size=64m
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+  mediamtx:
+    logging: *id001
+    image: bluenviron/mediamtx:latest
+    container_name: mediamtx
+    mac_address: 02:42:0a:00:14:1e
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.30
+    volumes:
+      - ./config/mediamtx.yml:/mediamtx.yml:ro
+    environment:
+      - MTX_RTMP=yes
+      - MTX_SRT=yes
+      - MTX_PROTOCOLS=tcp
+      - MTX_HLS=no
+      - MTX_WEBRTC=no
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+  mumble-server:
+    logging: *id001
+    image: mumblevoip/mumble-server:latest
+    container_name: mumble-server
+    mac_address: 02:42:0a:00:14:1f
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.31
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+      - SETPCAP
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/hassio/mumble:/data
+      - ./config/mumble.ini:/data/mumble_server_config.ini
+    environment:
+      MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_PASSWORD}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+networks:
+  vlan20_servers:
+    name: infrastructure_vlan20_servers
+    external: true
+
+
+
+
+
+
+

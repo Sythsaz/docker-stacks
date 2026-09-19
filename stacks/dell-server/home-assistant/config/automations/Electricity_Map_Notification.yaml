@@ -1,0 +1,25 @@
+- id: '1733104844886'
+  alias: Electricity Maps Fossil Fuel Notification
+  description: ''
+  triggers:
+  - type: value
+    device_id: 00c734ae69d7069fcfb397e1cfb677aa
+    entity_id: d466e457b6047c9fa2e55e3389a34642
+    domain: sensor
+    trigger: device
+    above: 90
+  conditions: []
+  actions:
+  # Need to update to script
+  - action: telegram_bot.send_message
+    metadata: {}
+    data:
+      entity_id:
+        - notify.telegram_bot_1112301530_1025100466
+        - notify.telegram_bot_1112301530_5256494429
+      parse_mode: markdownv2
+      message: >-
+        {{ state_attr ('sensor.electricity_maps_grid_fossil_fuel_percentage','friendly_name')}},
+        has changed to {{ states ('sensor.electricity_maps_grid_fossil_fuel_percentage') }}%
+      title: Alberta Electrical Grid Notification
+  mode: single

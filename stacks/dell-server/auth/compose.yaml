@@ -1,0 +1,343 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2026.8.2
+    container_name: infrastructure-authentik-server-1
+    mac_address: 02:42:0a:00:14:15
+    <<: *default-logging
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+    user: "1000:1000"
+    command: server
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_EMAIL__HOST: "smtp.gmail.com"
+      AUTHENTIK_EMAIL__PORT: 587
+      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL_USERNAME}
+      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD}
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_USERNAME}
+      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+      # AUTHENTIK_COOKIE_DOMAIN: "sythsaz.ca"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    volumes:
+      - /home/hassio/authentik/media:/media
+      - ./custom-templates:/templates:ro
+    networks:
+      authentik-net:
+      vlan20_servers:
+        ipv4_address: 10.0.20.21
+    dns:
+      - 10.0.20.1
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2026.8.2
+    container_name: infrastructure-authentik-worker-1
+    mac_address: 02:42:0a:00:14:24
+    <<: *default-logging
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+    user: "1000:1000"
+    command: worker
+    environment:
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
+      AUTHENTIK_POSTGRESQL__HOST: authentik-db
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_EMAIL__HOST: "smtp.gmail.com"
+      AUTHENTIK_EMAIL__PORT: 587
+      AUTHENTIK_EMAIL__USERNAME: ${AUTHENTIK_EMAIL_USERNAME}
+      AUTHENTIK_EMAIL__PASSWORD: ${AUTHENTIK_EMAIL_PASSWORD}
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_USERNAME}
+      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
+      # AUTHENTIK_COOKIE_DOMAIN: "sythsaz.ca"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    volumes:
+      - /home/hassio/authentik/media:/media
+      - ./custom-templates:/templates:ro
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.36
+      authentik-net:
+    dns:
+      - 10.0.20.1
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    depends_on:
+      authentik-db:
+        condition: service_healthy
+      authentik-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "ak", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  authentik-db:
+    image: postgres:16.4-alpine
+    container_name: infrastructure-authentik-db-1
+    <<: *default-logging
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run/postgresql:rw,exec,nosuid,size=64m
+    volumes:
+      - /home/hassio/authentik/postgres:/var/lib/postgresql/data
+    networks:
+      - authentik-net
+    environment:
+      POSTGRES_USER: authentik
+      POSTGRES_DB: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD}
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  authentik-redis:
+    image: redis:7.4-alpine
+    container_name: infrastructure-authentik-redis-1
+    <<: *default-logging
+    cap_add:
+      - DAC_OVERRIDE
+      - SETUID
+      - SETGID
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    command: ["sh", "-c", "exec setpriv --reuid redis --regid redis --clear-groups redis-server --requirepass \"${AUTHENTIK_REDIS_PASSWORD}\""]
+    volumes:
+      - /home/hassio/authentik/redis:/data
+    networks:
+      - authentik-net
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"${AUTHENTIK_REDIS_PASSWORD}\" ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '0.5'
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
+  authentik-proxy-outpost:
+    image: ghcr.io/goauthentik/proxy:2026.8.2
+    container_name: infrastructure-authentik-proxy-1
+    mac_address: 02:42:0a:00:14:20
+    <<: *default-logging
+    user: "1000:1000"
+    environment:
+      AUTHENTIK_HOST: http://10.0.20.21:9000
+      AUTHENTIK_INSECURE: "false"
+      AUTHENTIK_TOKEN: ${AUTHENTIK_OUTPOST_TOKEN}
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
+    networks:
+      authentik-net:
+      vlan20_servers:
+        ipv4_address: 10.0.20.32
+    dns:
+      - 10.0.20.1
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    depends_on:
+      authentik-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9000/outpost.goauthentik.io/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  authentik-ldap-outpost:
+    image: ghcr.io/goauthentik/ldap:2026.8.2
+    container_name: infrastructure-authentik-ldap-1
+    mac_address: 02:42:0a:00:14:21
+    <<: *default-logging
+    user: "1000:1000"
+    environment:
+      AUTHENTIK_HOST: http://10.0.20.21:9000
+      AUTHENTIK_INSECURE: "false"
+      AUTHENTIK_TOKEN: ${AUTHENTIK_LDAP_TOKEN}
+      AUTHENTIK_REDIS__HOST: authentik-redis
+      AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
+    networks:
+      authentik-net:
+      vlan20_servers:
+        ipv4_address: 10.0.20.33
+    dns:
+      - 10.0.20.1
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    depends_on:
+      authentik-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9300/outpost.goauthentik.io/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  authentik-radius-outpost:
+    image: ghcr.io/goauthentik/radius:2026.8.2
+    container_name: infrastructure-authentik-radius-1
+    mac_address: 02:42:0a:00:14:22
+    <<: *default-logging
+    user: "1000:1000"
+    environment:
+      AUTHENTIK_HOST: http://10.0.20.21:9000
+      AUTHENTIK_INSECURE: "false"
+      AUTHENTIK_TOKEN: ${AUTHENTIK_RADIUS_TOKEN}
+    networks:
+      authentik-net:
+      vlan20_servers:
+        ipv4_address: 10.0.20.34
+    dns:
+      - 10.0.20.1
+    labels:
+      - "autoheal=true"
+      - 'wud.tag.include=^\d+\.\d+\.\d+'
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    depends_on:
+      authentik-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9300/outpost.goauthentik.io/ping"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+
+networks:
+  authentik-net:
+    driver: bridge
+    name: z_auth_authentik-net
+  vlan20_servers:
+    external: true
+    name: infrastructure_vlan20_servers

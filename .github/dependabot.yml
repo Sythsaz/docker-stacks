@@ -1,0 +1,7 @@
+version: 2
+updates:
+  # Maintain Python dependencies for Home Assistant Pyscript
+  - package-ecosystem: "pip"
+    directory: "/stacks/dell-server/home-assistant/config/pyscript"
+    schedule:
+      interval: "weekly"

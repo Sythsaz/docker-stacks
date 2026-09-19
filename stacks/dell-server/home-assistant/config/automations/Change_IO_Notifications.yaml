@@ -1,0 +1,15 @@
+- id: '1743837123807'
+  alias: ChangeDetection.IO Notifications
+  description: ''
+  triggers:
+  - trigger: event
+    event_type: feedreader
+    event_data:
+      feed_url: !secret change_io_notification_url
+  conditions: []
+  actions:
+  - action: notify.mobile_app_syth
+    metadata: {}
+    data:
+      message: "{{ trigger.event.data.content }}"
+  mode: single

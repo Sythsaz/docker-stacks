@@ -1,0 +1,31 @@
+- id: '1732767327853'
+  alias: Sync Next Event to Kit Ashton Calendar
+  description: Sync the next event from Home to Kit Ashton
+  variables:
+    ios_calendar: !secret personal_ios_calendar_reminder_entity
+    google_calendar: !secret personal_google_calendar_reminder_entity
+  triggers:
+  - entity_id: !secret personal_ios_calendar_reminder_entity
+    trigger: state
+  conditions: []
+  actions:
+  - condition: template
+    value_template: >-
+      {% set current_event = state_attr(ios_calendar, 'message') %}
+      {% set existing_events = state_attr(google_calendar, 'events') | default([]) %}
+      {# check if there's _no_ matching event already #}
+      {{ existing_events
+         | selectattr('summary', 'equalto', current_event)
+         | selectattr('start_date_time', 'equalto', state_attr(ios_calendar, 'start_time'))
+         | list
+         | length == 0 }}
+  - action: google.create_event
+    target: 
+      entity_id: "{{ google_calendar }}"
+    data:
+      summary: "{{ state_attr(ios_calendar, 'message') | default('No Title')  }}"
+      start_date_time: "{{ state_attr(ios_calendar, 'start_time') }}"
+      end_date_time: "{{ state_attr(ios_calendar, 'end_time') }}"
+      location: "{{ state_attr(ios_calendar, 'location') | default('') }}"
+      description: "{{ state_attr(ios_calendar, 'description') | default('No Description') }}"
+  mode: single

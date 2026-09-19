@@ -1,0 +1,204 @@
+# ============================================================
+# HARDENED DOCKER COMPOSE SERVICE TEMPLATE
+# ============================================================
+# Reference: C:\Users\ashto\Docker\RULES.md §2, §3, §5, §6, §7
+#
+# Usage: Copy this file to stacks/<domain>/<service>/compose.yaml
+#        and customize for your specific service.
+#
+# Compose Specification 2024+ — NO version: directive
+# ============================================================
+
+# ── REUSABLE ANCHORS ─────────────────────────────────────────
+
+# §7: Logging — json-file with rotation to prevent disk exhaustion
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+# §6: Health check baseline
+x-healthcheck-defaults: &healthcheck-base
+  interval: 15s
+  timeout: 5s
+  retries: 3
+  start_period: 15s
+
+# ── SERVICES ─────────────────────────────────────────────────
+
+services:
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # EXAMPLE APPLICATION SERVICE
+  # Source: https://hub.docker.com/_/nginx
+  # Update cadence: Tier 1 — auto-update patch via WUD
+  # Last reviewed: 2026-09-07
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  example-app:
+    image: nginx:1.27-alpine
+
+    # §2.1: Non-root user (nginx alpine UID:GID)
+    user: "101:101"
+
+    # §2.1: Privilege escalation prevention
+    security_opt:
+      - no-new-privileges:true
+
+    # §2.1: Drop ALL capabilities — add back ONLY with justification
+    cap_drop:
+      - ALL
+    # cap_add:
+    #   - NET_BIND_SERVICE  # JUSTIFICATION: Binding port 80 inside container
+
+    # §2.1: Immutable root filesystem
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+      - /var/cache/nginx:rw,noexec,nosuid,size=128m
+
+    # §2.1: Fork bomb prevention
+    pids_limit: 100
+
+    # §5.2: Resource limits (adjust per service type)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+
+    # §7: Log rotation
+    <<: *default-logging
+
+    # §6: Health check — protocol-specific
+    healthcheck:
+      <<: *healthcheck-base
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+
+    # §6.2: Dependency ordering — wait for DB to be healthy
+    depends_on:
+      example-db:
+        condition: service_healthy
+
+    # §4b: WUD update labels + §6.3: Autoheal
+    labels:
+      - "wud.watch=true"
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.update=true"
+      - "wud.update.type=patch"         # Tier 1: auto-update patches
+      - "autoheal=true"
+
+    # §2.3: Port binding — localhost only by default
+    ports:
+      - "127.0.0.1:8080:80"
+
+    # §2.4: Network isolation
+    networks:
+      - internal
+      - proxy-net
+
+    restart: unless-stopped
+
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  # EXAMPLE DATABASE SERVICE
+  # Source: https://hub.docker.com/_/postgres
+  # Update cadence: Tier 0 — alert only, manual review
+  # Last reviewed: 2026-09-07
+  # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  example-db:
+    image: postgres:16.4-alpine
+
+    # §2.1: Non-root user (postgres alpine UID:GID)
+    user: "70:70"
+
+    # §2.1: Security hardening
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+    # §2.1: Read-only root with writable tmpfs
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=16m
+
+    pids_limit: 100
+
+    # §5.2: Database resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2048M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+    <<: *default-logging
+
+    # §3.3: Secrets via _FILE pattern — NEVER plaintext env vars
+    environment:
+      POSTGRES_USER: "appuser"
+      POSTGRES_DB: "appdb"
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets:
+      - db_password
+
+    # Persistent named volume for database data
+    volumes:
+      - db-data:/var/lib/postgresql/data
+
+    # §6: Health check — protocol-specific probe
+    healthcheck:
+      <<: *healthcheck-base
+      start_period: 30s    # Databases need longer cold boot grace period
+      test: ["CMD-SHELL", "pg_isready -U appuser -d appdb"]
+
+    # §4b: WUD — Tier 0: alert only, no auto-update
+    labels:
+      - "wud.watch=true"
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      # NOTE: No wud.update=true — Tier 0 services require manual review
+      - "autoheal=true"
+
+    # §2.4: Internal network only — databases NEVER on proxy-net
+    networks:
+      - internal
+
+    restart: unless-stopped
+
+# ── NETWORKS ─────────────────────────────────────────────────
+
+networks:
+  # §9.2: Per-stack internal network — no external access
+  internal:
+    driver: bridge
+    internal: true
+
+  # §9.2: Shared reverse proxy network (external, pre-created)
+  # Create with: docker network create proxy-net
+  # Only reverse proxy + web frontends join this network
+  proxy-net:
+    external: true
+
+# ── VOLUMES ──────────────────────────────────────────────────
+
+volumes:
+  db-data:
+    labels:
+      com.docker.backup: "true"         # Tag for backup automation
+
+# ── SECRETS ──────────────────────────────────────────────────
+# §3: Secrets decrypted from .enc files at deploy time
+# The .txt files are ephemeral — created by deploy-remote.ps1, never committed
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt

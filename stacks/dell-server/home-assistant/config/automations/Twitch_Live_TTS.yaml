@@ -1,0 +1,216 @@
+- id: '1726961327150'
+  alias: Twitch Live TTS
+  description: ''
+  triggers:
+  - entity_id:
+    - sensor.apejunk
+    from: offline
+    to: streaming
+    trigger: state
+    id: '01'
+  - trigger: state
+    entity_id:
+    - sensor.hellmasker
+    from: offline
+    to: streaming
+    id: '02'
+  - trigger: state
+    entity_id:
+    - sensor.itskiyoshi
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.taja
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.bluesage8
+    from: offline
+    to: streaming
+    id: '04'
+  - trigger: state
+    entity_id:
+    - sensor.tofa_sedai
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.chipichipicchapachapa
+    from: offline
+    to: streaming
+    id: '07'
+  - trigger: state
+    entity_id:
+    - sensor.lowleveltv
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.projektdyad
+    from: offline
+    to: streaming
+    id: 08
+  - trigger: state
+    entity_id:
+    - sensor.vampyreneko93
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.master_liu
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.bowhanon
+    from: offline
+    to: streaming
+    id: '10'
+  - trigger: state
+    entity_id:
+    - sensor.kunaives
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.guildwars2
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.cellofrag
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.emeraldjpg
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.jjiinxymayalyneah
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.juspar
+    from: offline
+    to: streaming
+    id: '05'
+  - trigger: state
+    entity_id:
+    - sensor.sythsaz
+    from: offline
+    to: streaming
+    id: '06'
+  - trigger: state
+    entity_id:
+    - sensor.heroinedark7734
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.enyokitty
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.aegyaegy
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.booberry_mischief
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.wendilunar
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.vedal987
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.engelburtmeow
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.floraleibloodwood
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.timelyfoxstudios
+    from: offline
+    to: streaming
+  - trigger: state
+    entity_id:
+    - sensor.justjakenlina
+    from: offline
+    to: streaming
+  conditions: []
+  actions:
+  - action: script.speak_var
+    metadata: {}
+    data:
+      bypass: false
+      cache: false
+      speak_var: >-
+        {{ trigger.to_state.attributes.friendly_name }} is now live. Currently
+        playing {{ trigger.to_state.attributes.game }}, {{ (trigger.to_state.attributes.title.split('!')[0])
+        }}.
+  - action: notify.auto_from_ha
+    metadata: {}
+    data:
+      target: !secret discord_updates_id
+      message: >-
+        {{ trigger.to_state.attributes.friendly_name }} is now live! Currently
+        playing {{ trigger.to_state.attributes.game }}, Titled '{{ trigger.to_state.attributes.title
+        }}' https://twitch.tv/{{ trigger.to_state.attributes.friendly_name }}
+    enabled: true
+  - action: rest_command.twitter_laptop
+    data_template:
+      message: >-
+        twitch: {{ trigger.to_state.attributes.friendly_name }} is now live!
+        Currently playing {{ trigger.to_state.attributes.game }}, Titled '{{ trigger.to_state.attributes.title
+        }}.'
+    response_variable: laptop_response
+    enabled: false
+    # Need to Update
+  - action: tts.speak
+    metadata: {}
+    data:
+      cache: false
+      media_player_entity_id: media_player.speakers
+      message: >-
+        {{ trigger.to_state.attributes.friendly_name }} is now live. Currently
+        playing {{ trigger.to_state.attributes.game }}, {{ (trigger.to_state.attributes.title.split('!')[0])
+        }}.
+    target:
+      entity_id: tts.piper
+    enabled: false
+  - action: rest_command.twitter_laptop
+    data_template:
+      message: >-
+        twitch: {{ state_attr('sensor.apejunk', 'friendly_name') }} is
+        now live! Currently playing {{ state_attr('sensor.apejunk', 'game') }},
+        titled '{{ state_attr('sensor.apejunk', 'title') }}.'
+    response_variable: laptop_response
+    enabled: false
+  - action: rest_command.twitter_laptop
+    data_template:
+      message: >-
+        twitch: {{ state_attr('sensor.hellmasker', 'friendly_name') }}
+        is now live! Currently playing {{ state_attr('sensor.hellmasker', 'game')
+        }}, titled '{{ state_attr('sensor.hellmasker', 'title') }}.'
+    response_variable: laptop_response
+    enabled: false
+  mode: queued
+  max: 10

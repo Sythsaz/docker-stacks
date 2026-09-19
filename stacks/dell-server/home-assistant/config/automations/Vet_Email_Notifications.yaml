@@ -1,0 +1,41 @@
+- id: '1749148246778'
+  alias: Vet Email Notifications
+  description: ''
+  variables:
+    ashton_email: !secret ashton_email_address
+    kit_email: !secret kit_email_address
+    vet_email: !secret vet_email_address
+  triggers:
+  - trigger: event
+    event_type: imap_content
+    event_data:
+      username: ashton_email
+  - trigger: event
+    event_type: imap_content
+    event_data:
+      username: kit_email
+  conditions: []
+  actions:
+  - if:
+    - condition: template
+      value_template: >-
+        {{ trigger.event.data.headers['Delivered-To'][0] == ashton_email
+        and trigger.event.data.sender == vet_email }}
+    then:
+    - action: script.speak_var
+      metadata: {}
+      data:
+        speak_var: Ashton got an email from {{ trigger.event.data.sender }} with the
+          subject {{ trigger.event.data.subject }}. {{ trigger.event.data.text }}
+  - if:
+    - condition: template
+      value_template: >-
+        {{ trigger.event.data.headers['Delivered-To'][0] == kit_email
+        and trigger.event.data.sender == vet_email}}
+    then:
+    - action: script.speak_var
+      metadata: {}
+      data:
+        speak_var: Kit got an email from {{ trigger.event.data.sender }} with the
+          subject {{ trigger.event.data.subject }}. {{ trigger.event.data.text }}
+  mode: single

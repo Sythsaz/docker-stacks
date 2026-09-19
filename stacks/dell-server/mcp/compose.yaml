@@ -1,0 +1,81 @@
+﻿x-logging:
+  logging: &id001
+    driver: json-file
+    options:
+      max-size: 50m
+      max-file: '3'
+      tag: '{{.Name}}/{{.ID}}'
+services:
+  ha-mcp:
+    logging: *id001
+    image: ghcr.io/homeassistant-ai/ha-mcp:latest
+    container_name: ha-mcp
+    user: 1000:1000
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - 'export HOMEASSISTANT_TOKEN=${HA_TOKEN}
+
+        exec ha-mcp-web
+
+        '
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.35
+    mac_address: '02:42:0a:00:14:23'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOMEASSISTANT_URL: http://10.0.20.23:8123
+      HOMEASSISTANT_TOKEN: ${HA_TOKEN}
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+  docker-mcp-gateway:
+    image: docker/mcp-gateway:latest
+    container_name: docker-mcp-gateway
+    logging:
+      driver: json-file
+      options:
+        max-size: 50m
+        max-file: '3'
+        tag: '{{.Name}}/{{.ID}}'
+    command:
+      - --transport
+      - sse
+      - --port
+      - '8811'
+    ports:
+      - 127.0.0.1:8811:8811
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOCKER_MCP_IN_CONTAINER: '1'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+          cpus: '0.5'
+networks:
+  vlan20_servers:
+    external: true
+    name: infrastructure_vlan20_servers
+  ha-net:
+    external: true
+    name: home-assistant_ha-net
+
+
+
+
+

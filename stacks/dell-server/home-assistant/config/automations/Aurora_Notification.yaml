@@ -1,0 +1,28 @@
+- id: '1726993309045'
+  alias: Aurora TTS Notification
+  description: ''
+  variables:
+    message: >-
+      You may see the Aurora with a {{ states ('sensor.aurora_visibility')
+      }}% chance within 30 minutes.
+  triggers:
+  - type: turned_on
+    device_id: cb3d76b81470288c22bdd6dd9eb281bf
+    entity_id: 4f40f187912d1e5640a10f52063fac70
+    domain: binary_sensor
+    trigger: device
+  conditions: []
+  actions:
+  - action: script.send_message_telegram_2
+    data:
+      message_target: >-
+        - !secret ashton_telegram_id
+        - !secret justice_telegram_id
+      message: >-
+        {{ message }}
+  - action: script.speak_var
+    metadata: {}
+    data:
+      speak_var: >-
+        {{ message }}
+  mode: single

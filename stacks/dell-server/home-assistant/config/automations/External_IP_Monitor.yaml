@@ -1,0 +1,35 @@
+- id: '1705158800802'
+  alias: External IP Monitor
+  description: ''
+  triggers:
+  - trigger: state
+    entity_id:
+    - sensor.opnsense_interface_wan_status
+    attribute: ipv4
+  conditions: []
+  actions:
+    - variables:
+        raw_ipv4: "{{ state_attr('sensor.opnsense_interface_wan_status', 'ipv4') | default('') | string | trim }}"
+        new_ip: "{{ raw_ipv4.split('/')[0] }}"
+    - if:
+        - condition: template
+          value_template: >-
+            {{ new_ip != '' and new_ip != 'unknown' and new_ip != states('input_text.external_ip') }}
+      then:
+        - service: notify.mobile_app_syth
+          data:
+            message: >-
+              External IP Changed to: {{ new_ip }}
+        - service: google_sheets.append_sheet
+          data:
+            config_entry: d07eeeee00ead597ea5aaa362ad17e83
+            worksheet: IP Address
+            data:
+              Prev IP: "{{ states('input_text.external_ip') }}"
+              New IP:  "{{ new_ip }}"
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.external_ip
+          data:
+            value: "{{ new_ip }}"
+  mode: single

@@ -1,0 +1,47 @@
+- id: pdf_update_notifications
+  alias: "Bylaw Pdf Update Notifications"
+  description: ""
+  triggers:
+    - platform: event
+      event_type: bylaw_update_link
+    - platform: event
+      event_type: bylaw_download_update
+  conditions: []
+  action:
+    - choose:
+        - conditions:
+            # success == true
+            - "{{ trigger.event.data.success | default(false) }}"
+          sequence:
+            - action: script.send_message_telegram_2
+              data:
+                message_target: !secret ashton_telegram_id
+                title: "Bylaw Download Succeeded"
+                message: >-
+                  <code>{{ trigger.event.data.filename or trigger.event.data.name }}</code>
+                  downloaded successfully from
+                  <a href="{{ trigger.event.data.url or trigger.event.data.link }}">
+                    {{ trigger.event.data.url or trigger.event.data.link }}
+                  </a>
+                  {% if trigger.event.data.last_modified is defined %}
+                    at <code>{{ trigger.event.data.last_modified }}</code>
+                  {% endif %}
+                parse_mode: html
+
+        - conditions:
+            # success == false
+            - "{{ not trigger.event.data.success | default(true) }}"
+          sequence:
+            - action: script.send_message_telegram_2
+              data:
+                message_target: !secret ashton_telegram_id
+                title: "Bylaw Download Failed"
+                message: >-
+                  <code>{{ trigger.event.data.filename or trigger.event.data.name }}</code>
+                  failed: <code>{{ trigger.event.data.reason or trigger.event.data.error }}</code>
+                  from <a href="{{ trigger.event.data.url or trigger.event.data.link }}">
+                    {{ trigger.event.data.url or trigger.event.data.link }}
+                  </a>
+                parse_mode: html
+      default: []
+      

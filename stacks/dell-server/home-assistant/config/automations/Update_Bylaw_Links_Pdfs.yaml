@@ -1,0 +1,14 @@
+- id: weekly_bylaw_pdf_tasks
+  alias: "Update Bylaw Links Pdfs"
+  description: "Update City Bylaw links and pdf files"
+  triggers:
+    - platform: time
+      at: "01:00:00"
+  conditions:
+    - condition: time
+      weekday:
+        - sun
+  actions:
+    - service: pyscript.scrape_multiple_bylaw_pdfs
+    - service: pyscript.check_all_bylaw_pdfs
+  mode: single
