@@ -37,8 +37,10 @@ def process_traccar_activity():
         start_iso = start_time.replace(" ", "T") + "-06:00"
         end_iso = end_time.replace(" ", "T") + "-06:00"
 
-        # 2. Extract Route Data from Traccar (Raw string injection to bypass urlencode colon stripping)
-        traccar_url = f"https://traccar.sythsaz.ca/api/reports/route?deviceId=1&from={start_iso}&to={end_iso}"
+        # 2. Extract Route Data from Traccar
+        # Domain is injected via Infisical -> secrets.yaml (traccar_domain)
+        traccar_domain = _secrets.get("traccar-domain")
+        traccar_url = f"https://{traccar_domain}/api/reports/route?deviceId=1&from={start_iso}&to={end_iso}"
         
         # Read Traccar API token from injected secrets
         TRACCAR_TOKEN = _secrets.get("traccar_api_token", "")
