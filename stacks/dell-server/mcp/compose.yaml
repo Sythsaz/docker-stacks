@@ -1,4 +1,4 @@
-﻿x-logging:
+x-logging:
   logging: &id001
     driver: json-file
     options:
@@ -53,10 +53,12 @@ services:
       - '8811'
     ports:
       - 127.0.0.1:8811:8811
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       DOCKER_MCP_IN_CONTAINER: '1'
+      DOCKER_HOST: tcp://monitoring-socket-proxy:2375
+    networks:
+      - vlan20_servers
+      - socket-proxy-net
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -74,6 +76,9 @@ networks:
   ha-net:
     external: true
     name: home-assistant_ha-net
+  socket-proxy-net:
+    external: true
+    name: infrastructure_socket-proxy-net
 
 
 

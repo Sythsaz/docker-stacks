@@ -12,10 +12,12 @@ services:
     image: redis:7.2.4-alpine
     container_name: infisical-redis
     <<: *default-logging
-    command: sh -c "exec redis-server --requirepass $$INFISICAL_REDIS_PASSWORD"
+    command: sh -c "echo \"requirepass $$INFISICAL_REDIS_PASSWORD\" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec setpriv --reuid redis --regid redis --clear-groups redis-server /tmp/redis.conf"
     restart: unless-stopped
     env_file:
       - ./secrets/infisical_env.txt
+    environment:
+      REDISCLI_AUTH: ${INFISICAL_REDIS_PASSWORD}
     networks:
       - security-net
     security_opt:
@@ -109,6 +111,7 @@ services:
       context: ./config
       dockerfile: Dockerfile.trivy
     container_name: trivy
+    user: "1000:1000"
     <<: *default-logging
     environment:
       - DISCORD_WEBHOOK_URL=${discord_webhook_trivy_ha_auto}
@@ -131,9 +134,8 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid
-      - /root/.cache/trivy:rw,exec,nosuid
+      - /home/trivyuser/.cache/trivy:rw,exec,nosuid
     networks:
-      security-net:
       socket-proxy-net:
       vlan20_servers:
         ipv4_address: 10.0.20.42

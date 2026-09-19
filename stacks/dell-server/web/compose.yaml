@@ -1,4 +1,4 @@
-﻿x-logging: &default-logging
+x-logging: &default-logging
   logging:
     driver: "json-file"
     options:
@@ -18,14 +18,17 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
-    command: ["sh", "-c", "redis-server --requirepass \"${WORDPRESS_REDIS_PASSWORD}\""]
+    environment:
+      WORDPRESS_REDIS_PASSWORD: ${WORDPRESS_REDIS_PASSWORD}
+      REDISCLI_AUTH: ${WORDPRESS_REDIS_PASSWORD}
+    command: ["sh", "-c", "echo \"requirepass $$WORDPRESS_REDIS_PASSWORD\" > /tmp/redis.conf && exec redis-server /tmp/redis.conf"]
     volumes:
       - redis_data:/data
     restart: unless-stopped
     networks:
       - db-net
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"${WORDPRESS_REDIS_PASSWORD}\" ping"]
+      test: ["CMD-SHELL", "redis-cli ping"]
       interval: 10s
       timeout: 3s
       retries: 3
@@ -66,8 +69,9 @@ services:
       MYSQL_DATABASE: wordpress
       MYSQL_USER: wordpress
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_PWD: ${MYSQL_ROOT_PASSWORD}
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p\"${MYSQL_ROOT_PASSWORD}\""]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root"]
       interval: 15s
       timeout: 5s
       retries: 3

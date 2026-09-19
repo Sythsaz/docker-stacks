@@ -12,6 +12,10 @@ services:
     container_name: infrastructure-authentik-server-1
     mac_address: 02:42:0a:00:14:15
     <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /run:rw,noexec,nosuid,size=16m
@@ -74,6 +78,10 @@ services:
     container_name: infrastructure-authentik-worker-1
     mac_address: 02:42:0a:00:14:24
     <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /run:rw,noexec,nosuid,size=16m
@@ -100,9 +108,7 @@ services:
       - /home/hassio/authentik/media:/media
       - ./custom-templates:/templates:ro
     networks:
-      vlan20_servers:
-        ipv4_address: 10.0.20.36
-      authentik-net:
+      - authentik-net
     dns:
       - 10.0.20.1
     labels:
@@ -135,6 +141,10 @@ services:
     image: postgres:16.4-alpine
     container_name: infrastructure-authentik-db-1
     <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     cap_add:
       - CHOWN
       - SETGID
@@ -183,7 +193,10 @@ services:
       - SETGID
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
-    command: ["sh", "-c", "exec setpriv --reuid redis --regid redis --clear-groups redis-server --requirepass \"${AUTHENTIK_REDIS_PASSWORD}\""]
+    environment:
+      AUTHENTIK_REDIS_PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
+      REDISCLI_AUTH: ${AUTHENTIK_REDIS_PASSWORD}
+    command: ["sh", "-c", "echo \"requirepass $$AUTHENTIK_REDIS_PASSWORD\" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec setpriv --reuid redis --regid redis --clear-groups redis-server /tmp/redis.conf"]
     volumes:
       - /home/hassio/authentik/redis:/data
     networks:
@@ -194,7 +207,7 @@ services:
       - "wud.watch=true"
       - "wud.trigger.type=discord"
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"${AUTHENTIK_REDIS_PASSWORD}\" ping"]
+      test: ["CMD-SHELL", "redis-cli ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -214,9 +227,13 @@ services:
     container_name: infrastructure-authentik-proxy-1
     mac_address: 02:42:0a:00:14:20
     <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     user: "1000:1000"
     environment:
-      AUTHENTIK_HOST: http://10.0.20.21:9000
+      AUTHENTIK_HOST: http://authentik-server:9000
       AUTHENTIK_INSECURE: "false"
       AUTHENTIK_TOKEN: ${AUTHENTIK_OUTPOST_TOKEN}
       AUTHENTIK_REDIS__HOST: authentik-redis
@@ -256,9 +273,13 @@ services:
     container_name: infrastructure-authentik-ldap-1
     mac_address: 02:42:0a:00:14:21
     <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     user: "1000:1000"
     environment:
-      AUTHENTIK_HOST: http://10.0.20.21:9000
+      AUTHENTIK_HOST: http://authentik-server:9000
       AUTHENTIK_INSECURE: "false"
       AUTHENTIK_TOKEN: ${AUTHENTIK_LDAP_TOKEN}
       AUTHENTIK_REDIS__HOST: authentik-redis
@@ -298,9 +319,13 @@ services:
     container_name: infrastructure-authentik-radius-1
     mac_address: 02:42:0a:00:14:22
     <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     user: "1000:1000"
     environment:
-      AUTHENTIK_HOST: http://10.0.20.21:9000
+      AUTHENTIK_HOST: http://authentik-server:9000
       AUTHENTIK_INSECURE: "false"
       AUTHENTIK_TOKEN: ${AUTHENTIK_RADIUS_TOKEN}
     networks:

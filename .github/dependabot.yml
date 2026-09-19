@@ -5,3 +5,11 @@ updates:
     directory: "/stacks/dell-server/home-assistant/config/pyscript"
     schedule:
       interval: "weekly"
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/stacks/dell-server/security/config"
+    schedule:
+      interval: "weekly"
