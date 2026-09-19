@@ -12,7 +12,7 @@ services:
     image: redis:7.2.4-alpine
     container_name: infisical-redis
     <<: *default-logging
-    command: sh -c "echo \"requirepass $$INFISICAL_REDIS_PASSWORD\" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec setpriv --reuid redis --regid redis --clear-groups redis-server /tmp/redis.conf"
+    command: sh -c "echo \"requirepass $$INFISICAL_REDIS_PASSWORD\" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec gosu redis redis-server /tmp/redis.conf"
     restart: unless-stopped
     env_file:
       - ./secrets/infisical_env.txt
