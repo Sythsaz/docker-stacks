@@ -16,8 +16,6 @@ services:
     restart: unless-stopped
     env_file:
       - ./secrets/infisical_env.txt
-    environment:
-      REDISCLI_AUTH: ${INFISICAL_REDIS_PASSWORD}
     networks:
       - security-net
     security_opt:
@@ -32,7 +30,7 @@ services:
     tmpfs:
       - /data:rw,noexec,nosuid
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "export REDISCLI_AUTH=$$INFISICAL_REDIS_PASSWORD && redis-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 3
