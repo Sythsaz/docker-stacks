@@ -14,7 +14,7 @@ param(
     [ValidatePattern('^[a-zA-Z0-9_-]+[/\\][a-zA-Z0-9_-]+$')]
     [string]$Stack,
     
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
     [string]$ProjectId,
 
     [ValidateSet('up -d', 'down', 'pull', 'restart')]
@@ -31,6 +31,10 @@ if ($Stack -eq "dell-server/security") {
     Write-Host "Routing Root of Trust stack (security) to SOPS deployment pipeline..." -ForegroundColor Magenta
     & (Join-Path $PSScriptRoot "deploy-remote-sops.ps1") -Stack $Stack -Action $Action -DryRun:$DryRun
     return
+}
+
+if ([string]::IsNullOrWhiteSpace($ProjectId)) {
+    throw "Error: -ProjectId is required for all Infisical-managed stacks."
 }
 
 $remoteUser = "hassio"
@@ -107,7 +111,8 @@ if ($isHomeAssistant) {
 if ($Action -eq "up -d") {
     $remoteCmd += "infisical run --projectId `"$ProjectId`" --env prod --path `"$infisicalPath`" -- docker compose pull"
     $remoteCmd += "infisical run --projectId `"$ProjectId`" --env prod --path `"$infisicalPath`" -- docker compose up -d"
-} else {
+}
+else {
     $remoteCmd += "infisical run --projectId `"$ProjectId`" --env prod --path `"$infisicalPath`" -- docker compose $Action"
 }
 
