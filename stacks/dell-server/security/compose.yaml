@@ -29,6 +29,7 @@ services:
     read_only: true
     tmpfs:
       - /data:rw,noexec,nosuid
+      - /tmp:rw,noexec,nosuid,size=64m
     healthcheck:
       test: ["CMD-SHELL", "export REDISCLI_AUTH=$$INFISICAL_REDIS_PASSWORD && redis-cli ping"]
       interval: 10s
