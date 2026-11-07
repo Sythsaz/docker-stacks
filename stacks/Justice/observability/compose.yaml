@@ -9,6 +9,7 @@ x-logging: &default-logging
 services:
   wud:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
@@ -95,6 +96,7 @@ services:
 
   scrutiny:
     labels:
+      - "autoheal=true"
       - "wud.watch=false"
     image: ghcr.io/analogj/scrutiny:master-omnibus@sha256:18689773150d6b8b53c94a435f40f7b6e946fd4a6d40b44c64fa2154a5b38941
     container_name: scrutiny

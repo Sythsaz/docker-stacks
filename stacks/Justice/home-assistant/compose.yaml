@@ -9,6 +9,7 @@ x-logging: &default-logging
 services:
   homeassistant:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.trigger.type=discord"
@@ -70,6 +71,7 @@ services:
 
   mosquitto:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.trigger.type=discord"
@@ -115,6 +117,7 @@ services:
 
   nodered:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
@@ -140,6 +143,8 @@ services:
     ports:
       # LAN JUSTIFICATION: Direct user browser access for visual automation workflows
       - "1880:1880"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     stop_grace_period: 30s
     depends_on:
@@ -160,6 +165,7 @@ services:
 
   esphome:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
@@ -206,6 +212,7 @@ services:
 
   tasmoadmin:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
@@ -256,6 +263,7 @@ services:
 
   piper:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
@@ -298,6 +306,7 @@ services:
 
   whisper:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"

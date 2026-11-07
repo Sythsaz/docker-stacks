@@ -9,6 +9,7 @@ x-logging: &default-logging
 services:
   socket-proxy:
     labels:
+      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
