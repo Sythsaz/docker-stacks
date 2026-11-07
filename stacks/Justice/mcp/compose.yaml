@@ -1,0 +1,92 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  ha-mcp:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: ghcr.io/homeassistant-ai/ha-mcp:8.4.2@sha256:e7ef0dd68cc9bf44665e4ec9302fd6246b5d39c9ef86931c848c95bc3404b7f7
+    container_name: ha-mcp
+    <<: *default-logging
+    user: "1001:1001"
+    command:
+      - ha-mcp-web
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      # LAN JUSTIFICATION: Antigravity IDE MCP server endpoint for Justice Home Assistant
+      - "8086:8086"
+    environment:
+      HOMEASSISTANT_URL: ${HA_URL:-http://127.0.0.1:8123}
+      HOMEASSISTANT_TOKEN: ${HA_TOKEN}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  docker-mcp-gateway:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=true"
+    image: docker/mcp-gateway:latest@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688
+    container_name: docker-mcp-gateway
+    <<: *default-logging
+    command:
+      - --transport
+      - sse
+      - --port
+      - '8811'
+    ports:
+      - "127.0.0.1:8811:8811"
+    environment:
+      DOCKER_MCP_IN_CONTAINER: "1"
+      DOCKER_HOST: tcp://socket-proxy:2375
+    networks:
+      - socket-proxy-net
+      - default
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8811/ || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 500M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+networks:
+  socket-proxy-net:
+    external: true
+    name: socket-proxy-net

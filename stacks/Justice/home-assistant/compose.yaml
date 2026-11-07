@@ -1,0 +1,339 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  homeassistant:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      - "wud.watch.digest=false"
+    image: ghcr.io/home-assistant/home-assistant:2026.11.0@sha256:c6c1ca9931036bf3a2c4cc088d8db25dfea3b33935a5ecc83c40349462e2f69e
+    container_name: homeassistant
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # CAP_ADD JUSTIFICATION:
+    # Service: Home Assistant
+    # Reason: Requires network admin/raw for ping tracking, DHCP discovery, and raw L2 access.
+    # HOST NETWORK JUSTIFICATION:
+    # Service: Home Assistant
+    # Reason: Requires raw L2 access for mDNS discovery, SSDP, HomeKit, AndroidTV remote,
+    #         Google Cast, and IoT device auto-discovery on local LAN.
+    # Reviewed: 2026-11-07
+    network_mode: host
+    environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      TZ: ${TZ:-America/Edmonton}
+      PUID: ${PUID:-1001}
+      PGID: ${PGID:-1001}
+    volumes:
+      - /home/jusparr/docker/ha_config:/config
+      - ./config/configuration.yaml:/config/configuration.yaml:ro
+      - ./config/automations:/config/automations:ro
+      - ./config/scripts:/config/scripts:ro
+      - ./config/pyscript:/config/pyscript:ro
+      - ./config/python_scripts:/config/python_scripts:ro
+      - ./config/templates:/config/templates:ro
+      - ./config/secrets.yaml:/config/secrets.yaml:ro
+      - /home/jusparr/docker/ha_backups:/backups
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8123/manifest.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: '1.5'
+          pids: 500
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  mosquitto:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      - "wud.watch.digest=false"
+    # Source: https://hub.docker.com/_/eclipse-mosquitto
+    # Update cadence: Security patches within 48h, minor versions monthly
+    image: eclipse-mosquitto:2.0.22@sha256:81a6193ae693942a3231cd3ac52875b02b7e3a19da671b2fb4b55cc874c5b279
+    container_name: mosquitto
+    <<: *default-logging
+    user: "1883:1883"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+      - /run:rw,noexec,nosuid,size=16m
+    volumes:
+      - ./config/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./config/password_file:/mosquitto/config/password_file:ro
+      - /home/jusparr/docker/mosquitto/data:/mosquitto/data
+    ports:
+      # LAN JUSTIFICATION: MQTT broker for Home Assistant and local IoT hardware
+      - "1883:1883"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "nc", "-z", "127.0.0.1", "1883"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  nodered:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: nodered/node-red:5.0.9@sha256:2ccd38b4066648bd5e17430c50a2f8102c566a82fd4f2fc5c342e61664d6896f
+    container_name: nodered
+    <<: *default-logging
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=128m
+    environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      - /home/jusparr/docker/nodered/data:/data
+      - ./config/nodered_settings.js:/data/settings.js:ro
+    ports:
+      # LAN JUSTIFICATION: Direct user browser access for visual automation workflows
+      - "1880:1880"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:1880/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+          pids: 100
+
+  esphome:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: esphome/esphome:2026.10.2@sha256:c994a49a945094643b14c213bfd500a95ffed94cd68848772828192e126bd375
+    container_name: esphome
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # HOST NETWORK JUSTIFICATION:
+    # Service: ESPHome
+    # Reason: Requires raw mDNS/UDP broadcast access to discover and flash
+    #         new unprovisioned ESP microcontroller boards on the LAN.
+    network_mode: host
+    environment:
+      TZ: ${TZ:-America/Edmonton}
+      PUID: ${PUID:-1001}
+      PGID: ${PGID:-1001}
+    volumes:
+      - /home/jusparr/docker/esphome/config:/config
+      - /home/jusparr/docker/esphome/storage:/storage
+      - /home/jusparr/docker/esphome/idedata:/idedata
+      - /home/jusparr/docker/esphome/.esphome:/.esphome
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6052"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+          pids: 100
+
+  tasmoadmin:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: ghcr.io/tasmoadmin/tasmoadmin:v5.0.0@sha256:459df5a79b7d4fbef52dc5aa04884ad917bcd6d94e359dfc5c6fd69205c2f471
+    container_name: tasmoadmin
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /var/run:rw,exec,nosuid,size=64m
+      - /run:rw,exec,nosuid,size=64m
+    environment:
+      TZ: ${TZ:-America/Edmonton}
+      PUID: ${PUID:-1001}
+      PGID: ${PGID:-1001}
+    volumes:
+      - /home/jusparr/docker/tasmoadmin:/data/tasmoadmin
+    ports:
+      # LAN JUSTIFICATION: Tasmota management portal
+      - "5119:80"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+
+  piper:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: rhasspy/wyoming-piper:2.5.2@sha256:7d39aafac409c2b6b09d999ed04d84c311d632e558b35baa60fad6aac722af7a
+    container_name: piper
+    <<: *default-logging
+    user: "1001:1001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      - /home/jusparr/docker/piper/data:/data
+    ports:
+      - "127.0.0.1:10200:10200"
+    command: --voice en_US-ryan-high
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect((\"localhost\",10200))"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+          pids: 100
+
+  whisper:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: rhasspy/wyoming-whisper:3.8.1@sha256:ba6fcb6056ebe237d15a325381763a80af2fc8fcedaa04f6a714a7375eb20d80
+    container_name: whisper
+    <<: *default-logging
+    user: "1001:1001"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    environment:
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      - /home/jusparr/docker/whisper/data:/data
+    ports:
+      - "127.0.0.1:10300:10300"
+    command: --model distil-large-v3
+    restart: unless-stopped
+    stop_grace_period: 30s
+    depends_on:
+      homeassistant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect((\"localhost\",10300))"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 3072M
+          cpus: '1.5'
+          pids: 200

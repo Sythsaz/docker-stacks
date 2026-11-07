@@ -1,0 +1,109 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  socket-proxy:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: tecnativa/docker-socket-proxy:0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    container_name: socket-proxy
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=64m
+    environment:
+      CONTAINERS: 1
+      IMAGES: 1
+      INFO: 1
+      NETWORKS: 1
+      NODES: 1
+      SERVICES: 1
+      TASKS: 1
+      VOLUMES: 1
+      POST: 0
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      # DOCKER SOCKET JUSTIFICATION:
+      # Service: socket-proxy
+      # Reason: Serves as the sole privileged proxy mediator for Docker socket events,
+      #         exposing read-only endpoints to WUD and MCP gateway.
+      # Mitigations: Container runs read-only filesystem, dropped ALL caps, bound to
+      #              isolated internal socket-proxy-net (no public ports exposed).
+      # Reviewed: 2026-11-07
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket-proxy-net
+    restart: unless-stopped
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2375/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.25'
+          pids: 50
+        reservations:
+          memory: 32M
+          cpus: '0.05'
+
+  portainer_agent:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: portainer/agent:2.27.1@sha256:d2e6833bb6f067962f79be262066cc96921159bc9a49a3100cacecb542522fd5
+    container_name: portainer_agent
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      # ══════════════════════════════════════════════════════════
+      # DOCKER SOCKET JUSTIFICATION (§6.3 Approved Socket Mount):
+      # Service: portainer_agent
+      # Reason: Portainer agent requires full Docker socket and volume access to deploy,
+      #         manage, and monitor containers remotely from Dell server's Portainer UI.
+      # Mitigations: Port 9001 bound to LAN only (no WAN exposure).
+      #              Container runs behind OPNsense firewall and Tailscale mesh.
+      # Reviewed: 2026-11-07
+      # ══════════════════════════════════════════════════════════
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/volumes:/var/lib/docker/volumes
+    ports:
+      # LAN JUSTIFICATION: Portainer Agent remote node endpoint for centralized management from Dell server
+      - "9001:9001"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+networks:
+  socket-proxy-net:
+    name: socket-proxy-net
+    driver: bridge

@@ -1,0 +1,104 @@
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+logger:
+  default: warning
+  logs:
+    custom_components.pyscript: info
+    homeassistant.components.template: info
+    homeassistant.components.automation: error
+    homeassistant.components.script: error
+system_log:
+  fire_event: true
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+system_health:
+
+recorder:
+  purge_keep_days: 30  # Set to 365 for a year
+  commit_interval: 60   # Higher reduces write frequency/size
+  #exclude:
+    #entities:
+
+homeassistant:
+  allowlist_external_dirs:
+    - '/config'
+    - '/config/www'
+    - '/config/www/downloads'
+    - '/config/www/snapshots'
+    - '/config/media'
+    - '/config/pyscript'
+    - '/config/scripts'
+    - '/config/automations'
+    - '/config/feedreader'
+    
+  media_dirs:
+    local: /config/media
+    camera_snapshots: /config/www/snapshots
+
+device_tracker:
+  - platform: bluetooth_le_tracker
+    track_new_devices: false
+    track_battery: true
+    track_battery_interval: 01:00:00
+
+mqtt_statestream:
+  base_topic: homeassistant-j
+  publish_attributes: false
+  publish_timestamps: false
+
+sensor:
+  - platform: feedparser
+    name: Global Calgary
+    feed_url: https://globalnews.ca/calgary/feed/
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+
+  - platform: feedparser
+    name: Global Lethbridge
+    feed_url: https://globalnews.ca/lethbridge/feed/
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+
+  - platform: feedparser
+    name: Alberta Electric System Operator 
+    feed_url: https://www.aeso.ca/rss/grid-alert
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+
+  - platform: feedparser
+    name: Lethbridge - Weather Alert - Environment Canada
+    feed_url: https://weather.gc.ca/rss/battleboard/abrm78_e.xml
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+
+  - platform: feedparser
+    name: Canada - National News
+    feed_url: https://api.io.canada.ca/io-server/gc/news/en/v2?sort=publishedDate&orderBy=desc&publishedDate%3E=2021-10-25&pick=100&format=atom&atomtitle=National%20News
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30
+
+  - platform: feedparser
+    name: Home Assistant Intergration Alerts
+    feed_url: https://alerts.home-assistant.io/feed.xml
+    local_time: true
+    show_topn: 20
+    scan_interval:
+      minutes: 30

@@ -1,0 +1,95 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  aircast:
+    labels:
+      - "wud.tag.include=^[a-f0-9]+-ls\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: 1activegeek/airconnect:5fad7cd1-ls69@sha256:b814f627c7e8f09ec3b03e0858f6c402d99dbf9c30623c095c0eebe4aba938f6
+    container_name: aircast
+    <<: *default-logging
+    # ══════════════════════════════════════════════════════════
+    # HOST NETWORK JUSTIFICATION:
+    # Service: aircast (AirConnect)
+    # Reason: AirConnect requires raw Layer 2 mDNS and UPnP multicast packets
+    #         to discover Chromecast and UPnP/Sonos audio renderers and expose
+    #         them as AirPlay targets across the local subnet.
+    # Mitigations: Container runs with cap_drop ALL, no-new-privileges:true,
+    #              and memory/CPU resource limits.
+    # Reviewed: 2026-11-07
+    # ══════════════════════════════════════════════════════════
+    network_mode: host
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      AIRUPNP_VAR: kill
+      AIRCAST_VAR: "-x /config/config.xml"
+      PUID: ${PUID:-1001}
+      PGID: ${PGID:-1001}
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      - /home/jusparr/docker/airconnect/config:/config
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  mediamtx:
+    labels:
+      - "wud.tag.include=^v?\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: bluenviron/mediamtx:v1.20.1@sha256:1b029d11049be75630e9b73bb0d5f47b08a7db4eaee89a80bf8f53bc40e56414
+    container_name: mediamtx
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      MTX_PROTOCOLS: tcp
+      MTX_HLS: "no"
+      MTX_WEBRTC: "no"
+      MTX_RTMP: "yes"
+      MTX_SRT: "yes"
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      - /home/jusparr/mediamtx/mediamtx.yml:/mediamtx.yml:ro
+    ports:
+      # LAN JUSTIFICATION: RTMP ingestion and playback endpoint for local streaming
+      - "1935:1935"
+      # LAN JUSTIFICATION: RTSP stream relay for IP cameras and media feeds
+      - "8554:8554"
+      # LAN JUSTIFICATION: SRT stream relay port
+      - "8890:8890/udp"
+    restart: unless-stopped
+    stop_grace_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+          pids: 100
+        reservations:
+          memory: 128M
+          cpus: '0.2'

@@ -1,0 +1,149 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  wud:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      - "wud.watch.digest=false"
+    image: getwud/wud:9.0.0@sha256:754035e6fa73b6da12c3e6325de3a2c674616b2e86d9e6863a3d24ad48194160
+    container_name: wud
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/jusparr/docker/wud:/store
+    environment:
+      WUD_AUTH_ADMIN_USER: ${WUD_AUTH_ADMIN_USER}
+      WUD_AUTH_ADMIN_PASSWORD: ${WUD_AUTH_ADMIN_PASSWORD}
+      WUD_WATCHER_SOCKETPROXY_HOST: socket-proxy
+      WUD_WATCHER_SOCKETPROXY_PORT: 2375
+      WUD_LOG_LEVEL: info
+      TZ: ${TZ:-America/Edmonton}
+    networks:
+      - socket-proxy-net
+      - default
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 64M
+          cpus: '0.1'
+
+  autoheal:
+    labels:
+      - "wud.watch=false"
+    image: willfarrell/autoheal:latest@sha256:b1517815087f04edd0b0c103d6df4ac5c4d6f22db5c62e32949e135a25f1d945
+    container_name: autoheal
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      AUTOHEAL_CONTAINER_LABEL: autoheal
+      AUTOHEAL_INTERVAL: 15
+      AUTOHEAL_START_PERIOD: 60
+      AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
+      DOCKER_SOCK: /var/run/docker.sock
+      TZ: ${TZ:-America/Edmonton}
+    volumes:
+      # ══════════════════════════════════════════════════════════
+      # DOCKER SOCKET JUSTIFICATION (§6.3 Approved Socket Mount):
+      # Service: autoheal
+      # Reason: Autoheal monitors container health status and restarts unhealthy
+      #         containers labeled with autoheal=true to prevent downtime.
+      # Mitigations: Container runs with no-new-privileges, isolated on internal network
+      #              without exposed ports, strict CPU/memory limits.
+      # Reviewed: 2026-11-07
+      # ══════════════════════════════════════════════════════════
+      - /var/run/docker.sock:/var/run/docker.sock
+    restart: unless-stopped
+    stop_grace_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+          cpus: '0.1'
+          pids: 50
+        reservations:
+          memory: 16M
+          cpus: '0.02'
+
+  scrutiny:
+    labels:
+      - "wud.watch=false"
+    image: ghcr.io/analogj/scrutiny:master-omnibus@sha256:18689773150d6b8b53c94a435f40f7b6e946fd4a6d40b44c64fa2154a5b38941
+    container_name: scrutiny
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      # CAP_ADD JUSTIFICATION:
+      # Service: scrutiny (Hard Drive Health & SMART Monitoring)
+      # Reason: Requires SYS_RAWIO and SYS_ADMIN capabilities to issue SMART ioctls
+      #         directly to underlying block devices (/dev/sda) without full root privilege.
+      - SYS_RAWIO
+      - SYS_ADMIN
+    devices:
+      - /dev/sda:/dev/sda
+    volumes:
+      - /run/udev:/run/udev:ro
+      - /home/jusparr/docker/scrutiny/config:/opt/scrutiny/config
+      - /home/jusparr/docker/scrutiny/influxdb:/opt/scrutiny/influxdb
+    ports:
+      # LOCALHOST ONLY: Dashboard bound to localhost to prevent LAN exposure
+      - "127.0.0.1:8090:8080"
+    environment:
+      SCRUTINY_WEB_INFLUXDB_HOST: localhost
+      SCRUTINY_COLLECTOR_HOST_ID: justice
+      PUID: ${PUID:-1001}
+      PGID: ${PGID:-1001}
+      TZ: ${TZ:-America/Edmonton}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+          pids: 100
+        reservations:
+          memory: 128M
+          cpus: '0.1'
+
+networks:
+  socket-proxy-net:
+    external: true
+    name: socket-proxy-net
