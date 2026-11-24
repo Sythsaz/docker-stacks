@@ -1,5 +1,3 @@
-version: '3.8'
-
 x-default-logging: &default-logging
   logging:
     driver: "json-file"
@@ -9,13 +7,19 @@ x-default-logging: &default-logging
 
 services:
   infisical-redis:
-    image: redis:7.2.4-alpine
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: redis:7.2.4-alpine@sha256:c8bb255c3559b3e458766db810aa7b3c7af1235b204cfdb304e79ff388fe1a5a
     container_name: infisical-redis
     <<: *default-logging
-    command: sh -c "echo \"requirepass $$INFISICAL_REDIS_PASSWORD\" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec gosu redis redis-server /tmp/redis.conf"
+    command: sh -c "chown redis:redis /data && echo \"requirepass $$INFISICAL_REDIS_PASSWORD\" > /tmp/redis.conf && chown redis:redis /tmp/redis.conf && exec gosu redis redis-server /tmp/redis.conf"
     restart: unless-stopped
     env_file:
-      - ./secrets/infisical_env.txt
+      - /dev/shm/infisical_env.txt
     networks:
       - security-net
     security_opt:
@@ -40,14 +44,21 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
+          pids: 200
 
   infisical-db:
-    image: postgres:14-alpine
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: postgres:14.24-alpine@sha256:1a916758fce623be724e9371461f13e0d48627b434989bd1873d96343d017f94
     container_name: infisical-db
     <<: *default-logging
     restart: unless-stopped
     env_file:
-      - ./secrets/infisical_env.txt
+      - /dev/shm/infisical_env.txt
     environment:
       POSTGRES_DB: infisical
       POSTGRES_USER: infisical
@@ -74,9 +85,16 @@ services:
         limits:
           memory: 512M
           cpus: '1.0'
+          pids: 200
 
   infisical:
-    image: infisical/infisical:latest
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: infisical/infisical:v0.165.13@sha256:6c71533516d185291c1609f09019b1f8a6014cf332a474aa5006fbf07dc4d0bc
     container_name: infisical
     <<: *default-logging
     restart: unless-stopped
@@ -85,8 +103,9 @@ services:
         condition: service_healthy
       infisical-redis:
         condition: service_healthy
+    read_only: true
     env_file:
-      - ./secrets/infisical_env.txt
+      - /dev/shm/infisical_env.txt
     environment:
       NODE_ENV: production
       SITE_URL: https://secrets.sythsaz.ca
@@ -99,30 +118,63 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/api/status || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    volumes:
+      - infisical-tmp:/tmp
     deploy:
       resources:
         limits:
           memory: 1G
           cpus: '1.0'
+          pids: 100
+
+  trivy-init:
+    image: alpine:latest
+    container_name: trivy-init
+    <<: *default-logging
+    command: sh -c "chown -R 1000:1000 /cache /tmp_vol"
+    volumes:
+      - trivy_cache:/cache
+      - trivy_tmp:/tmp_vol
+    networks:
+      - security-net
 
   trivy:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     build:
       context: ./config
       dockerfile: Dockerfile.trivy
     container_name: trivy
     user: "1000:1000"
     <<: *default-logging
+    depends_on:
+      trivy-init:
+        condition: service_completed_successfully
     environment:
+      - CONFIG_HASH=${STACK_CONFIG_HASH:-}
       - DISCORD_WEBHOOK_URL=${discord_webhook_trivy_ha_auto}
+      - TRIVY_CACHE_DIR=/home/trivyuser/.cache/trivy
     entrypoint: ["sh", "-c"]
     command: 
       - |
-        chmod +x /usr/local/bin/trivy_scan_and_notify.sh
         while true; do
-          /usr/local/bin/trivy_scan_and_notify.sh
+          bash /usr/local/bin/trivy_scan_and_notify.sh
           sleep 86400
         done
     volumes:
+      - trivy_tmp:/tmp
+      - trivy_cache:/home/trivyuser/.cache/trivy
       - /home/hassio/docker_volumes/trivy/reports:/report
       - ./config/trivy_scan_and_notify.sh:/usr/local/bin/trivy_scan_and_notify.sh:ro
       - ./config/.trivyignore:/.trivyignore:ro
@@ -131,19 +183,22 @@ services:
     cap_drop:
       - ALL
     read_only: true
-    tmpfs:
-      - /tmp:rw,noexec,nosuid
-      - /home/trivyuser/.cache/trivy:rw,exec,nosuid
     networks:
       socket-proxy-net:
       vlan20_servers:
         ipv4_address: 10.0.20.42
     mac_address: 02:42:0a:00:14:42
+    healthcheck:
+      test: ["CMD-SHELL", "ps aux | grep sleep || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '0.5'
+          memory: 4096M
+          cpus: '1.0'
+          pids: 100
 
 networks:
   security-net:
@@ -156,16 +211,12 @@ networks:
     external: true
     name: infrastructure_vlan20_servers
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+volumes:
+  trivy_cache:
+  trivy_tmp:
+  infisical-tmp:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: size=1G,rw,exec,nodev,nosuid

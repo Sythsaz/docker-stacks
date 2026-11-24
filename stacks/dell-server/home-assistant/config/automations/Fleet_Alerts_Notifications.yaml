@@ -1,0 +1,172 @@
+# ==============================================================================
+# Fleet Alerts & Self-Healing Notifications (Syth Hub — Primary Action Triage)
+# ==============================================================================
+
+- id: 'fleet_alerts_notification_engine'
+  alias: 'Fleet Alerts & Self-Healing Notifications'
+  description: 'Ingests fleet events, handles all severity levels, creates persistent dashboard notifications, dispatches actionable mobile notifications to Syth with prompts, and auto-dismisses on resolution.'
+  triggers:
+    - trigger: webhook
+      webhook_id: fleet_alert
+      allowed_methods:
+        - POST
+        - PUT
+      local_only: false
+  conditions: []
+  actions:
+    - variables:
+        sev: "{{ (trigger.json.severity | default('WARN')) | upper }}"
+        host: "{{ trigger.json.hostname | default(trigger.json.host | default('unknown-node')) }}"
+        metric_name: "{{ trigger.json.metric | default(trigger.json.service | default('general')) }}"
+        notif_id: "{{ trigger.json.notification_id | default('fleet_' ~ host ~ '_' ~ metric_name) }}"
+        notif_tag: "{{ host }}_{{ metric_name }}"
+        alert_title: "{{ trigger.json.title | default('[' ~ sev ~ '] ' ~ host ~ ': ' ~ metric_name) }}"
+        alert_msg: "{{ trigger.json.message | default(trigger.json.msg | default('Alert event reported from ' ~ host)) }}"
+        target_url: "{{ trigger.json.url | default('/lovelace/system') }}"
+
+    - choose:
+        # 1. RESOLVED / OK -> Auto-Dismiss Active Notification & Clear Phone
+        - conditions:
+            - condition: template
+              value_template: "{{ sev in ['RESOLVED', 'OK', 'CLEARED'] }}"
+          sequence:
+            - action: persistent_notification.dismiss
+              data:
+                notification_id: "{{ notif_id }}"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                message: "clear_notification"
+                data:
+                  tag: "{{ notif_tag }}"
+
+        # 2. CRITICAL or ERROR -> High Priority Alert with Audio & Action Buttons
+        - conditions:
+            - condition: template
+              value_template: "{{ sev in ['CRITICAL', 'ERROR', 'FATAL'] }}"
+          sequence:
+            - action: persistent_notification.create
+              data:
+                title: "🚨 {{ alert_title }}"
+                message: |
+                  **{{ alert_msg }}**
+
+                  - **Host:** `{{ host }}`
+                  - **Metric / Service:** `{{ metric_name }}`
+                  - **Severity:** `{{ sev }}`
+                  - **Timestamp:** `{{ now().strftime('%Y-%m-%d %H:%M:%S') }}`
+                notification_id: "{{ notif_id }}"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                title: "🚨 {{ alert_title }}"
+                message: "{{ alert_msg }}"
+                data:
+                  tag: "{{ notif_tag }}"
+                  group: "fleet-alerts"
+                  channel: "Fleet Critical"
+                  importance: high
+                  priority: high
+                  color: "#E53935"
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1.0
+                  actions:
+                    - action: "URI"
+                      title: "Open Dashboard"
+                      uri: "{{ target_url }}"
+                    - action: "ACK_ALERT_{{ notif_tag }}"
+                      title: "Acknowledge"
+
+        # 3. WARN -> Standard Alert with Action Buttons
+        - conditions:
+            - condition: template
+              value_template: "{{ sev in ['WARN', 'WARNING'] }}"
+          sequence:
+            - action: persistent_notification.create
+              data:
+                title: "⚠️ {{ alert_title }}"
+                message: |
+                  {{ alert_msg }}
+
+                  - **Host:** `{{ host }}`
+                  - **Metric:** `{{ metric_name }}`
+                notification_id: "{{ notif_id }}"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                title: "⚠️ {{ alert_title }}"
+                message: "{{ alert_msg }}"
+                data:
+                  tag: "{{ notif_tag }}"
+                  group: "fleet-alerts"
+                  channel: "Fleet Alerts"
+                  importance: default
+                  priority: default
+                  color: "#FFA000"
+                  push:
+                    sound: default
+                  actions:
+                    - action: "URI"
+                      title: "Open Dashboard"
+                      uri: "{{ target_url }}"
+                    - action: "ACK_ALERT_{{ notif_tag }}"
+                      title: "Acknowledge"
+
+        # 4. INFO / DEFAULT -> Low Priority Silent Notification
+        - conditions: []
+          sequence:
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                title: "ℹ️ {{ alert_title }}"
+                message: "{{ alert_msg }}"
+                data:
+                  tag: "{{ notif_tag }}"
+                  group: "fleet-alerts"
+                  channel: "Fleet Info"
+                  importance: low
+                  priority: low
+                  color: "#1E88E5"
+  mode: queued
+  max: 30
+
+# ------------------------------------------------------------------------------
+# Action Handler: Dismiss Persistent Notification when Syth Taps [Acknowledge]
+# Also dispatches remote clearance to Justice's HA for synchronized dismiss.
+# ------------------------------------------------------------------------------
+- id: 'fleet_alerts_dismiss_handler'
+  alias: 'Fleet Alerts Acknowledge & Dismiss Handler'
+  description: 'Dismisses active persistent notifications, clears Syth mobile alert, and remotely dismisses Justice alert.'
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+  conditions:
+    - condition: template
+      value_template: "{{ trigger.event.data.action.startswith('ACK_ALERT_') }}"
+  actions:
+    - variables:
+        notif_tag: "{{ trigger.event.data.action.replace('ACK_ALERT_', '') }}"
+        target_notif_id: "fleet_{{ notif_tag }}"
+    - action: persistent_notification.dismiss
+      data:
+        notification_id: "{{ target_notif_id }}"
+    - action: notify.mobile_app_syth
+      continue_on_error: true
+      data:
+        message: "clear_notification"
+        data:
+          tag: "{{ notif_tag }}"
+    # Remote cross-clear on Justice HA if alert pertains to Justice/desk-j
+    - if:
+        - condition: template
+          value_template: "{{ 'justice' in notif_tag.lower() or 'desk-j' in notif_tag.lower() }}"
+      then:
+        - action: rest_command.clear_justice_alert
+          continue_on_error: true
+          data:
+            metric: "{{ notif_tag }}"
+  mode: parallel
+  max: 10

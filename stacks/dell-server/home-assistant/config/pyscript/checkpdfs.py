@@ -142,7 +142,11 @@ async def check_all_bylaw_pdfs():
 
         log.debug(f"→ local_file    = {local_file!r}")    # type: ignore
         log.debug(f"  exists?        {local_file.exists()}") # type: ignore
-        url = state.get(job["url_sensor"])  # type: ignore
+        try:
+            url = state.get(job["url_sensor"])  # type: ignore
+        except NameError:
+            log.warning(f"Skipping {job['url_sensor']} - entity does not exist yet. Run scrape_multiple_bylaw_pdfs first.") # type: ignore
+            continue
         lm_sensor = job["lm_sensor"]
         st = hass.states.get(lm_sensor)  # type: ignore
         prev_mod = st.state if st else ""

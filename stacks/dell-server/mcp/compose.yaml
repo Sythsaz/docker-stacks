@@ -5,40 +5,97 @@ x-logging:
       max-size: 50m
       max-file: '3'
       tag: '{{.Name}}/{{.ID}}'
+
 services:
   ha-mcp:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: ghcr.io/homeassistant-ai/ha-mcp:latest
+    image: ghcr.io/homeassistant-ai/ha-mcp:8.5.0@sha256:e1538bcdadb13a5467bbb8258fba3262a05518585e18115742da638adec7057c
     container_name: ha-mcp
     user: 1000:1000
-    entrypoint:
-      - /bin/sh
-      - -c
     command:
-      - 'export HOMEASSISTANT_TOKEN=${HA_TOKEN}
-
-        exec ha-mcp-web
-
-        '
+      - ha-mcp-web
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.35
+      # Allows the host to talk to the container
+      default:
     mac_address: '02:42:0a:00:14:23'
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     environment:
-      HOMEASSISTANT_URL: http://10.0.20.23:8123
+      HOMEASSISTANT_URL: ${HA_URL}
       HOMEASSISTANT_TOKEN: ${HA_TOKEN}
     restart: unless-stopped
+    # Built from scratch - rely on restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD", "wget", "--spider", "-q", "http://localhost:9997/v3/config/paths"]
+      # interval: 15s
+      # timeout: 5s
+      # retries: 3
     deploy:
       resources:
         limits:
           memory: 256M
           cpus: '0.5'
+          pids: 100
+
+  ha-mcp-pos:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    logging: *id001
+    image: ghcr.io/homeassistant-ai/ha-mcp:8.5.0@sha256:e1538bcdadb13a5467bbb8258fba3262a05518585e18115742da638adec7057c
+    container_name: ha-mcp-pos
+    user: 1000:1000
+    command:
+      - ha-mcp-web
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.39
+    mac_address: '02:42:0a:00:14:39'
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      HOMEASSISTANT_URL: ${HA_URL_POS}
+      HOMEASSISTANT_TOKEN: ${HA_TOKEN_POS}
+    restart: unless-stopped
+    # Built from scratch - rely on restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD", "wget", "--spider", "-q", "http://localhost:9997/v3/config/paths"]
+      # interval: 15s
+      # timeout: 5s
+      # retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+          pids: 100
+          
   docker-mcp-gateway:
-    image: docker/mcp-gateway:latest
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Removed the semver regex requirement and explicitly re-enabled digest tracking, as no semantic tags exist for it
+      - "wud.watch.digest=true"
+    image: docker/mcp-gateway:latest@sha256:f5a679a05fc39022a046167bef92aeeb01bcd59485ad27843ae5227db7950688
     container_name: docker-mcp-gateway
     logging:
       driver: json-file
@@ -57,18 +114,27 @@ services:
       DOCKER_MCP_IN_CONTAINER: '1'
       DOCKER_HOST: tcp://monitoring-socket-proxy:2375
     networks:
-      - vlan20_servers
-      - socket-proxy-net
+      socket-proxy-net:
+      vlan20_servers:
+        ipv4_address: 10.0.20.44
+    mac_address: '02:42:0a:00:14:44'
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8811/ || exit 0"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
           memory: 500M
           cpus: '0.5'
+          pids: 100
+          
 networks:
   vlan20_servers:
     external: true
@@ -78,9 +144,3 @@ networks:
     name: home-assistant_ha-net
   socket-proxy-net:
     external: true
-    name: infrastructure_socket-proxy-net
-
-
-
-
-

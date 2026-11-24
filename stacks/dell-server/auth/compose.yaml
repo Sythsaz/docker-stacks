@@ -8,7 +8,14 @@ x-logging: &default-logging
 
 services:
   authentik-server:
-    image: ghcr.io/goauthentik/server:2026.8.2
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: ghcr.io/goauthentik/server:2026.8.2@sha256:ff8489a5af4f4fe415ffd180a8e3c10b120bc2592d13d79dac050d977f7b9ecd
     container_name: infrastructure-authentik-server-1
     mac_address: 02:42:0a:00:14:15
     <<: *default-logging
@@ -22,6 +29,9 @@ services:
     user: "1000:1000"
     command: server
     environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      AUTHENTIK_HOST: ${AUTHENTIK_HOST_VAR}
+      AUTHENTIK_HOST_BROWSER: ${AUTHENTIK_HOST_BROWSER_VAR}
       AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
       AUTHENTIK_POSTGRESQL__HOST: authentik-db
@@ -36,7 +46,7 @@ services:
       AUTHENTIK_EMAIL__USE_TLS: "true"
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_USERNAME}
       AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
-      # AUTHENTIK_COOKIE_DOMAIN: "sythsaz.ca"
+      AUTHENTIK_COOKIE_DOMAIN: ${AUTHENTIK_COOKIE_DOMAIN_VAR}
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
       - /home/hassio/authentik/media:/media
@@ -47,11 +57,6 @@ services:
         ipv4_address: 10.0.20.21
     dns:
       - 10.0.20.1
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     depends_on:
       authentik-db:
         condition: service_healthy
@@ -69,12 +74,20 @@ services:
         limits:
           memory: 1024M
           cpus: '1.0'
+          pids: 100
         reservations:
           memory: 256M
           cpus: '0.25'
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2026.8.2
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: ghcr.io/goauthentik/server:2026.8.2@sha256:ff8489a5af4f4fe415ffd180a8e3c10b120bc2592d13d79dac050d977f7b9ecd
     container_name: infrastructure-authentik-worker-1
     mac_address: 02:42:0a:00:14:24
     <<: *default-logging
@@ -88,6 +101,9 @@ services:
     user: "1000:1000"
     command: worker
     environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      AUTHENTIK_HOST: ${AUTHENTIK_HOST_VAR}
+      AUTHENTIK_HOST_BROWSER: ${AUTHENTIK_HOST_BROWSER_VAR}
       AUTHENTIK_REDIS__HOST: authentik-redis
       AUTHENTIK_REDIS__PASSWORD: ${AUTHENTIK_REDIS_PASSWORD}
       AUTHENTIK_POSTGRESQL__HOST: authentik-db
@@ -102,7 +118,7 @@ services:
       AUTHENTIK_EMAIL__USE_TLS: "true"
       AUTHENTIK_EMAIL__FROM: ${AUTHENTIK_EMAIL_USERNAME}
       AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,173.245.48.0/20,103.21.244.0/22,103.22.200.0/22,103.31.4.0/22,141.101.64.0/18,108.162.192.0/18,190.93.240.0/20,188.114.96.0/20,197.234.240.0/22,198.41.128.0/17,162.158.0.0/15,104.16.0.0/13,104.24.0.0/14,172.64.0.0/13,131.0.72.0/22,2400:cb00::/32,2606:4700::/32,2803:f800::/32,2405:b500::/32,2405:8100::/32,2a06:98c0::/29,2c0f:f248::/32"
-      # AUTHENTIK_COOKIE_DOMAIN: "sythsaz.ca"
+      AUTHENTIK_COOKIE_DOMAIN: ${AUTHENTIK_COOKIE_DOMAIN_VAR}
       AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
     volumes:
       - /home/hassio/authentik/media:/media
@@ -111,11 +127,6 @@ services:
       - authentik-net
     dns:
       - 10.0.20.1
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     depends_on:
       authentik-db:
         condition: service_healthy
@@ -133,12 +144,19 @@ services:
         limits:
           memory: 1024M
           cpus: '1.0'
+          pids: 100
         reservations:
           memory: 256M
           cpus: '0.25'
 
   authentik-db:
-    image: postgres:16.4-alpine
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: postgres:16.4-alpine@sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c
     container_name: infrastructure-authentik-db-1
     <<: *default-logging
     security_opt:
@@ -162,11 +180,6 @@ services:
       POSTGRES_USER: authentik
       POSTGRES_DB: authentik
       POSTGRES_PASSWORD: ${AUTHENTIK_DB_PASSWORD}
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 10s
@@ -179,12 +192,19 @@ services:
         limits:
           memory: 2048M
           cpus: '1.0'
+          pids: 200
         reservations:
           memory: 512M
           cpus: '0.25'
 
   authentik-redis:
-    image: redis:7.4-alpine
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: redis:7.4-alpine@sha256:520775a41a63e77e06c73e35d2fd9cc15921a609516818796b4ecbb813078bc7
     container_name: infrastructure-authentik-redis-1
     <<: *default-logging
     cap_add:
@@ -201,11 +221,6 @@ services:
       - /home/hassio/authentik/redis:/data
     networks:
       - authentik-net
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     healthcheck:
       test: ["CMD-SHELL", "redis-cli ping"]
       interval: 10s
@@ -218,12 +233,20 @@ services:
         limits:
           memory: 1024M
           cpus: '0.5'
+          pids: 200
         reservations:
           memory: 256M
           cpus: '0.25'
 
   authentik-proxy-outpost:
-    image: ghcr.io/goauthentik/proxy:2026.8.2
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: ghcr.io/goauthentik/proxy:2026.8.2@sha256:b76e672ad76cbdb30705f242422bec47df903fe9568fac207ba23e9d8713c59e
     container_name: infrastructure-authentik-proxy-1
     mac_address: 02:42:0a:00:14:20
     <<: *default-logging
@@ -233,7 +256,8 @@ services:
       - ALL
     user: "1000:1000"
     environment:
-      AUTHENTIK_HOST: http://authentik-server:9000
+      AUTHENTIK_HOST: ${AUTHENTIK_LOCAL_HOST_VAR}
+      AUTHENTIK_HOST_BROWSER: ${AUTHENTIK_HOST_BROWSER_VAR}
       AUTHENTIK_INSECURE: "false"
       AUTHENTIK_TOKEN: ${AUTHENTIK_OUTPOST_TOKEN}
       AUTHENTIK_REDIS__HOST: authentik-redis
@@ -244,11 +268,6 @@ services:
         ipv4_address: 10.0.20.32
     dns:
       - 10.0.20.1
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     depends_on:
       authentik-server:
         condition: service_healthy
@@ -264,12 +283,20 @@ services:
         limits:
           memory: 128M
           cpus: '0.5'
+          pids: 100
         reservations:
           memory: 64M
           cpus: '0.1'
 
   authentik-ldap-outpost:
-    image: ghcr.io/goauthentik/ldap:2026.8.2
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: ghcr.io/goauthentik/ldap:2026.8.2@sha256:570e7663175195b46c9bbf0a22598be533fd1317ef1a97050dd27ba8228de850
     container_name: infrastructure-authentik-ldap-1
     mac_address: 02:42:0a:00:14:21
     <<: *default-logging
@@ -279,7 +306,7 @@ services:
       - ALL
     user: "1000:1000"
     environment:
-      AUTHENTIK_HOST: http://authentik-server:9000
+      AUTHENTIK_HOST: ${AUTHENTIK_LOCAL_HOST_VAR}
       AUTHENTIK_INSECURE: "false"
       AUTHENTIK_TOKEN: ${AUTHENTIK_LDAP_TOKEN}
       AUTHENTIK_REDIS__HOST: authentik-redis
@@ -290,11 +317,6 @@ services:
         ipv4_address: 10.0.20.33
     dns:
       - 10.0.20.1
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     depends_on:
       authentik-server:
         condition: service_healthy
@@ -310,12 +332,20 @@ services:
         limits:
           memory: 128M
           cpus: '0.5'
+          pids: 100
         reservations:
           memory: 64M
           cpus: '0.1'
 
   authentik-radius-outpost:
-    image: ghcr.io/goauthentik/radius:2026.8.2
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: ghcr.io/goauthentik/radius:2026.8.2@sha256:0a2c0b45d4e5b1af7976d2ff03830e9d28b29465a49400f4fcddde7c2c9551af
     container_name: infrastructure-authentik-radius-1
     mac_address: 02:42:0a:00:14:22
     <<: *default-logging
@@ -325,7 +355,7 @@ services:
       - ALL
     user: "1000:1000"
     environment:
-      AUTHENTIK_HOST: http://authentik-server:9000
+      AUTHENTIK_HOST: ${AUTHENTIK_LOCAL_HOST_VAR}
       AUTHENTIK_INSECURE: "false"
       AUTHENTIK_TOKEN: ${AUTHENTIK_RADIUS_TOKEN}
     networks:
@@ -334,11 +364,6 @@ services:
         ipv4_address: 10.0.20.34
     dns:
       - 10.0.20.1
-    labels:
-      - "autoheal=true"
-      - 'wud.tag.include=^\d+\.\d+\.\d+'
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     depends_on:
       authentik-server:
         condition: service_healthy
@@ -354,6 +379,7 @@ services:
         limits:
           memory: 128M
           cpus: '0.5'
+          pids: 100
         reservations:
           memory: 64M
           cpus: '0.1'
@@ -362,6 +388,7 @@ services:
 networks:
   authentik-net:
     driver: bridge
+    internal: true
     name: z_auth_authentik-net
   vlan20_servers:
     external: true

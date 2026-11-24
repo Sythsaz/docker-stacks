@@ -5,28 +5,46 @@ x-logging:
       max-size: 50m
       max-file: '3'
       tag: '{{.Name}}/{{.ID}}'
+
 services:
   plex:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: linuxserver/plex:latest
+    image: linuxserver/plex:1.43.4.10903-e5521bd8c-ls324@sha256:1f6f97d76e7bdb013789e94c838f2d9133b01ee4b2d4194148e492c4e4f12d90
     container_name: plex
     mac_address: 02:42:0a:00:14:1b
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.27
+      media-net:
     volumes:
       - /home/hassio/home_assistant/plex_config:/config
-      - /mnt/externals/LB/Movies:/LB/Movies:ro
-      - /mnt/externals/LB/Music:/LB/Music:ro
-      - /mnt/externals/LB/Shows:/LB/Shows:ro
-      - /mnt/externals/SB/Anime:/SB/Anime:ro
-      - /mnt/externals/SB/Movies:/SB/Movies:ro
-      - /mnt/externals/SB/Music:/SB/Music:ro
-      - /mnt/externals/SB/Shows:/SB/Shows:ro
+      - /mnt/externals/LB/Movies:/LB/Movies:rw
+      - /mnt/externals/LB/Music:/LB/Music:rw
+      - /mnt/externals/LB/Shows:/LB/Shows:rw
+      - /mnt/externals/SB/Anime:/SB/Anime:rw
+      - /mnt/externals/SB/Movies:/SB/Movies:rw
+      - /mnt/externals/SB/Music:/SB/Music:rw
+      - /mnt/externals/SB/Shows:/SB/Shows:rw
     environment:
       - PUID=1000
       - PGID=1000
       - LIBVA_DRIVER_NAME=r600
+      - TZ=America/Edmonton
     devices:
       - /dev/dri:/dev/dri
       - /dev/kfd:/dev/kfd
@@ -45,17 +63,26 @@ services:
         limits:
           memory: 4096M
           cpus: '2.5'
+          pids: 300
         reservations:
           memory: 1024M
           cpus: '0.5'
+
   frigate:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: ghcr.io/blakeblackshear/frigate:0.18.0-rc2
+    image: ghcr.io/blakeblackshear/frigate:0.18.0-rc2@sha256:9678a83a76e4730ac7d9ea7428370e32ae656d6b312aaad30d6c69f3fef14d35
     container_name: frigate
     mac_address: 02:42:0a:00:14:19
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.25
+      media-net:
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -69,18 +96,17 @@ services:
       - FOWNER
       - NET_ADMIN
       - NET_RAW
+    shm_size: "1gb"
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /tmp/cache:rw,noexec,nosuid,size=512m
       - /run:rw,exec,nosuid,size=64m
-      - /dev/shm:rw,exec,nosuid,size=1g
       - /var/lib/nginx:rw,noexec,nosuid,size=64m
       - /var/log/nginx:rw,noexec,nosuid,size=64m
     volumes:
       - /home/hassio/home_assistant/frigate_config:/config
       - ./config/frigate.yml:/config/config.yml:ro
-      - /mnt/externals/LB/frigate:/media
-      - /etc/localtime:/etc/localtime:ro
+      - /mnt/mon/frigate:/media
     devices:
       - /dev/dri/renderD128:/dev/dri/renderD128
     group_add:
@@ -91,8 +117,10 @@ services:
       FRIGATE_GENAI_API_KEY: ${FRIGATE_GENAI_API_KEY}
       FRIGATE_MQTT_PASSWORD: ${FRIGATE_MQTT_PASSWORD}
       FRIGATE_NOTIFICATION_EMAIL: ${FRIGATE_NOTIFICATION_EMAIL}
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
       PUID: '1000'
       PGID: '1000'
+      TZ: America/Edmonton
     healthcheck:
       test:
         - CMD
@@ -107,43 +135,81 @@ services:
         limits:
           memory: 4096M
           cpus: '2.5'
+          # JUSTIFICATION: Frigate utilizes extensive Python multiprocessing for object detection and spawns multiple ffmpeg/go2rtc threads per camera stream. Default PID limits cause thread exhaustion.
+          pids: 1500
+
   music_assistant:
+    labels:
+      - "autoheal=true"
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: ghcr.io/music-assistant/server:latest
+    image: ghcr.io/music-assistant/server:2.10.4@sha256:37a9a2776e838a754c9f5b38c432567389952304e7cb8f6b44b6cd28043de6de
     container_name: music_assistant
     mac_address: 02:42:0a:00:14:1c
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    shm_size: "256mb"
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=256m
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.28
+      media-net:
     volumes:
       - /home/hassio/home_assistant/music_config:/data
       - /mnt/externals/LB/Music:/media:ro
     environment:
       - PUID=1000
       - PGID=1000
+      - TZ=America/Edmonton
     restart: unless-stopped
     healthcheck:
       test:
-        - CMD
-        - wget
-        - -qO-
-        - http://localhost:8095/
+        - CMD-SHELL
+        - wget -qO- http://127.0.0.1:8095/ >/dev/null 2>&1 || exit 1
       interval: 15s
       timeout: 5s
       retries: 3
+      start_period: 30s
     deploy:
       resources:
         limits:
-          memory: 1024M
-          cpus: '1.0'
+          memory: 2048M
+          cpus: '2.0'
+          # JUSTIFICATION: Music Assistant spawns multi-threaded Rust librespot (Tokio runtime, 15-25 threads) + multiple multi-threaded ffmpeg audio transcoding/buffering subprocesses per stream/crossfade. Default pids: 100 causes cgroup fork exhaustion ([Errno 11] Resource temporarily unavailable) after 2-4 tracks.
+          pids: 1500
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
   aircast:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: 1activegeek/airconnect:latest
+    image: 1activegeek/airconnect:06743af9-ls86@sha256:99f5f614f4091087d32038a985d6727bfcda2cbfe85d822608495897f0e2cea4
     container_name: aircast
     mac_address: 02:42:0a:00:14:1d
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.29
+      media-net:
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -152,20 +218,41 @@ services:
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /run:rw,exec,nosuid,size=64m
+    environment:
+      - TZ=America/Edmonton
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "ps | grep aircast || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
           memory: 256M
           cpus: '0.5'
+          pids: 100
+
   mediamtx:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: bluenviron/mediamtx:latest
+    image: bluenviron/mediamtx:v1.21.0@sha256:19fddade8d6110a3d718ac0045681fbeba344ae563a066205fe5929a87f7582f
     container_name: mediamtx
     mac_address: 02:42:0a:00:14:1e
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.30
+      media-net:
     volumes:
       - ./config/mediamtx.yml:/mediamtx.yml:ro
     environment:
@@ -174,20 +261,38 @@ services:
       - MTX_PROTOCOLS=tcp
       - MTX_HLS=no
       - MTX_WEBRTC=no
+      - CONFIG_HASH=${STACK_CONFIG_HASH:-}
+      - TZ=America/Edmonton
     restart: unless-stopped
+    # Built from scratch - rely on restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD", "wget", "--spider", "-q", "http://localhost:9997/v3/config/paths"]
+      # interval: 15s
+      # timeout: 5s
+      # retries: 3
     deploy:
       resources:
         limits:
           memory: 1024M
           cpus: '1.0'
+          pids: 100
+
   mumble-server:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     logging: *id001
-    image: mumblevoip/mumble-server:latest
+    image: mumblevoip/mumble-server:1.5.915@sha256:b2d6b2d44b712232af90bdef37bfcbbf4e2f9819aee6bf8b7f46588b34973f6f
     container_name: mumble-server
     mac_address: 02:42:0a:00:14:1f
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.31
+      media-net:
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -206,19 +311,24 @@ services:
     environment:
       MUMBLE_SUPERUSER_PASSWORD: ${MUMBLE_PASSWORD}
     restart: unless-stopped
+    # Built from scratch - rely on restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD", "wget", "--spider", "-q", "http://localhost:9997/v3/config/paths"]
+      # interval: 15s
+      # timeout: 5s
+      # retries: 3
     deploy:
       resources:
         limits:
           memory: 512M
           cpus: '1.0'
+          pids: 100
+
 networks:
   vlan20_servers:
     name: infrastructure_vlan20_servers
     external: true
-
-
-
-
-
-
-
+  media-net:
+    driver: bridge
+    internal: true
+    name: z_media_net

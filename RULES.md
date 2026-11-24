@@ -1,7 +1,7 @@
 # 🐋 DOCKER MANAGEMENT RULES
 
 > **Scope**: Governs ALL Docker operations across the entire ecosystem — local Docker Desktop
-> on `DESKTOP-U5E7NRV`, remote Docker Engine on `debian-dell` (10.0.1.221), and cross-machine
+> on `DESKTOP-U5E7NRV`, remote Docker Engine on `debian-dell` (10.0.20.221), and cross-machine
 > MCP relay to Stream PC (`DESKTOP-3PNV5BO`) and Laptop (`LAPTOP`).
 >
 > **Authority**: This file is the single source of truth for Docker governance. Every agent
@@ -155,6 +155,10 @@ ports:
   $env:DOCKER_CONTENT_TRUST = 1
   ```
 - **Container Scanning**: Run `docker scout cves <image>` before deploying any new image
+- **Automated Scanning & Filtering (Trivy)**:
+  - Nightly scans execute via `trivy_scan_and_notify.sh`.
+  - Scans MUST always append `--ignore-unfixed` (to prevent alerting on unpatchable issues) and `--ignorefile /.trivyignore`.
+  - Accepted risks (e.g., unactionable OS-level `linux-libc-dev` or `libssl-dev` vulnerabilities in upstream bases) MUST be globally whitelisted in `stacks/dell-server/security/config/.trivyignore`.
 - **SBOM Generation**: Maintain Software Bill of Materials for production images:
   ```bash
   docker scout sbom <image> --format spdx-json > sbom.json
@@ -576,7 +580,7 @@ Keep 7 daily | 4 weekly | 6 monthly
 
 ### 10.2 Canonical Entrypoints
 - **Local**: `C:\Users\ashto\.gemini\scripts\run_mcp_docker.ps1`
-- **Remote**: `ssh hassio@10.0.1.221 "docker mcp gateway run"` (via settings.json)
+- **Remote**: `ssh hassio@10.0.20.221 "docker mcp gateway run"` (via settings.json)
 - **Batch**: `C:\Users\ashto\.gemini\scripts\run_docker_mcp.bat`
 
 ### 10.3 Safety Boundaries
@@ -587,11 +591,11 @@ Keep 7 daily | 4 weekly | 6 monthly
 
 ---
 
-## §11 — DELL SERVER REMOTE CONTROL (10.0.1.221)
+## §11 — DELL SERVER REMOTE CONTROL (10.0.20.221)
 
 ### 11.1 Access Architecture
 ```
-DESKTOP-U5E7NRV ──SSH──▶ hassio@10.0.1.221 ──docker──▶ Containers
+DESKTOP-U5E7NRV ──SSH──▶ hassio@10.0.20.221 ──docker──▶ Containers
                           (key-based auth)
 Stream PC ────────SSH──▶ ashto@DESKTOP-U5E7NRV ──relay──▶ Docker MCP Gateway
 Laptop ───────────SSH──▶ ashto@DESKTOP-U5E7NRV ──relay──▶ Docker MCP Gateway

@@ -79,7 +79,7 @@ services:
     # §6: Health check — protocol-specific
     healthcheck:
       <<: *healthcheck-base
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "curl", "-fsS", "http://localhost/"]
 
     # §6.2: Dependency ordering — wait for DB to be healthy
     depends_on:

@@ -15,9 +15,10 @@ homeassistant:
 frontend:
   themes: !include_dir_merge_named themes
 
-automation manual: !include_dir_merge_list automations/
+# automation manual: !include_dir_merge_list automations/
 automation ui: !include automations.yaml
-script manual: !include_dir_merge_named scripts/       
+automation fleet: !include automations/Fleet_Alerts_Notifications.yaml
+# script manual: !include_dir_merge_named scripts/
 script ui: !include scripts.yaml
 scene: !include scenes.yaml
 
@@ -123,8 +124,10 @@ recorder:
       - sensor.lethbridge_*
       - sensor.date_time*
       - sensor.*_last_seen
+      - sensor.*opnsense_interface_*_per_second
       - sensor.*_uptime
     entities:
+      - automation.update_clock_seconds
       - binary_sensor.system_monitor_process_nmap
       - script.download_a_file_with_retries_2
       - media_player.living_room_tv
@@ -198,7 +201,7 @@ logger:
 system_log:
   fire_event: true
 mqtt_statestream:
-  publish_attributes: false
+  publish_attributes: true
   publish_timestamps: false
   base_topic: homeassistant
   exclude:
@@ -261,6 +264,14 @@ rest_command:
       headers:
           content-type: "application/json"
       payload: '{"command":"sendMessage","params":["{{ chat_id }}", "{{ message }}"]}'
+
+  clear_justice_alert:
+      url: "http://100.79.211.101:8123/api/webhook/fleet_alert"
+      method: post
+      headers:
+          content-type: "application/json"
+      payload: '{"severity":"RESOLVED","hostname":"Justice","metric":"{{ metric }}"}'
+      timeout: 5
 
 python_script:
 
@@ -452,5 +463,5 @@ sensor:
 command_line:
   - sensor:
       name: HA DB Size
-      command: 'ssh -i /config/.ssh/id_rsa -o StrictHostKeyChecking=no hassio@10.0.20.221 "du -sh /config/home-assistant_v2.db | cut -f1"'
+      command: !secret HA_DB_SIZE_CMD
       scan_interval: 3600  # Hourly

@@ -3,9 +3,8 @@ import time
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone
+import yaml
 
-# ─── 1) Define your “scrape jobs” ────────────────────────────────────────
-BYPAGE = "https://www.lethbridge.ca/bylaws-animal-services/bylaws/"
 JOBS = [
     #
     # Nuisance bylaws
@@ -121,10 +120,15 @@ JOBS = [
     }
 ]
 
-BASE_URL = "https://www.lethbridge.ca"
-
 @service # type: ignore
 async def scrape_multiple_bylaw_pdfs():
+    import yaml
+    with open("/config/secrets.yaml", "r") as file:
+        secrets_dict = yaml.safe_load(file)
+        
+    BASE_URL = secrets_dict["municipality_base_url"]
+    BYPAGE = f"{BASE_URL}/bylaws-animal-services/bylaws/"
+
     # 1) fetch the index page once
     try:
         resp = await asyncio.to_thread(requests.get, BYPAGE, timeout=15)
@@ -178,7 +182,7 @@ async def scrape_multiple_bylaw_pdfs():
             full,
             {
                 "friendly_name": name,
-                "attribution":   "City of Lethbridge Bylaw PDF Link",
+                "attribution":   "Bylaw PDF Link",
                 "last_scraped":  ts,
             }
         )

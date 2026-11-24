@@ -8,9 +8,21 @@ x-logging: &default-logging
 
 services:
   portainer:
-    image: portainer/portainer-ce:latest
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: portainer/portainer-ce:2.45.1-alpine@sha256:90e250a68377e8589cd0fdb68b971bdb2ebb05ea5188ebbdaaa8aeb36929305a
     container_name: portainer
     restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9000/api/system/status"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -21,32 +33,61 @@ services:
       - /run:rw,noexec,nosuid,size=64m
     volumes:
       - /home/hassio/home_assistant/portainer_data:/data:rw
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
     environment:
       - DOCKER_HOST=tcp://monitoring-socket-proxy:2375
     networks:
-      - vlan20_servers
+      socket-proxy-net:
+      vlan20_servers:
+        ipv4_address: 10.0.20.18
+    mac_address: 02:42:0a:00:14:12
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+          pids: 100
+        reservations:
+          memory: 256M
+          cpus: '0.25'
+
   tasmoadmin:
-    # Source: https://github.com/tasmoadmin/tasmoadmin
-    # Update cadence: Security patches within 48h, minor versions monthly
-    # Last reviewed: 2026-09-11
-    image: ghcr.io/tasmoadmin/tasmoadmin:v5.0.0
-    container_name: home-automation-tasmoadmin-1
-    <<: *default-logging
-    tmpfs:
-      - /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000
-      - /var/run:rw,exec,nosuid,size=64m,uid=1000,gid=1000
-    volumes:
-      - /home/hassio/tasmoadmin:/data
-    ports:
-      - "127.0.0.1:5119:80"
-    networks:
-      - tasmoadmin-net
     labels:
-      - "autoheal=true"
       - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
       - "wud.watch=true"
       - "wud.update=true"
       - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    # Source: https://github.com/tasmoadmin/tasmoadmin
+    # Update cadence: Security patches within 48h, minor versions monthly
+    # Last reviewed: 2026-09-11
+    image: ghcr.io/tasmoadmin/tasmoadmin:v5.0.0@sha256:459df5a79b7d4fbef52dc5aa04884ad917bcd6d94e359dfc5c6fd69205c2f471
+    container_name: home-automation-tasmoadmin-1
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - DAC_OVERRIDE
+    # Needs read_only = false to be removed due to needing write access to /data
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m,uid=1000,gid=1000
+      - /var/run:rw,exec,nosuid,size=64m,uid=1000,gid=1000
+      - /run:rw,exec,nosuid,size=64m,uid=1000,gid=1000
+    volumes:
+      - /home/hassio/tasmoadmin:/data
+    environment:
+      TZ: America/Edmonton
+    ports:
+      - "127.0.0.1:5119:80"
+    networks:
+      - tasmoadmin-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost"]
@@ -59,25 +100,34 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
+          pids: 100
         reservations:
           memory: 64M
           cpus: '0.1'
 
   scrutiny:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     # Source: https://github.com/AnalogJ/scrutiny
     # Update cadence: Security patches within 48h, minor versions monthly
     # Last reviewed: 2026-09-11
-    image: ghcr.io/analogj/scrutiny:master-omnibus
+    image: ghcr.io/analogj/scrutiny:master-omnibus@sha256:18689773150d6b8b53c94a435f40f7b6e946fd4a6d40b44c64fa2154a5b38941
     container_name: monitoring-scrutiny-1
     <<: *default-logging
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     # ROOT USER & CAP_ADD JUSTIFICATION / PRIVILEGED:
     # Service: Scrutiny
     # Reason: Requires root execution, privileged mode, and 
     #         SYS_RAWIO to read SMART data directly from host 
     #         hard drives and access raw /dev block devices.
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     privileged: true
+    environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      TZ: America/Edmonton
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /run:rw,exec,nosuid,size=64m
@@ -91,12 +141,6 @@ services:
       - "127.0.0.1:8090:8080"
     networks:
       - scrutiny-net
-    labels:
-      - "autoheal=true"
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.watch=true"
-      - "wud.update=true"
-      - "wud.update.type=patch"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/health"]
@@ -109,12 +153,20 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
+          pids: 200
         reservations:
           memory: 128M
           cpus: '0.1'
 
   socket-proxy:
-    image: tecnativa/docker-socket-proxy
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
+    image: tecnativa/docker-socket-proxy:0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
     container_name: monitoring-socket-proxy
     logging:
       driver: "json-file"
@@ -138,20 +190,26 @@ services:
       SERVICES: 1
       TASKS: 1
       VOLUMES: 1
+      TZ: America/Edmonton
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
       - socket-proxy-net
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2375/version"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     deploy:
       resources:
         limits:
           memory: 128M
           cpus: '0.2'
-
+          pids: 100
 
   wud:
-    image: fmartinou/whats-up-docker:latest
+    image: getwud/wud:9.0.0@sha256:754035e6fa73b6da12c3e6325de3a2c674616b2e86d9e6863a3d24ad48194160
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -170,6 +228,8 @@ services:
     volumes:
       - /home/hassio/wud:/store
     environment:
+      WUD_AUTH_ADMIN_USER: ${WUD_AUTH_ADMIN_USER}
+      WUD_AUTH_ADMIN_PASSWORD: ${WUD_AUTH_ADMIN_PASSWORD}
       WUD_WATCHER_SOCKETPROXY_HOST: socket-proxy
       WUD_WATCHER_SOCKETPROXY_PORT: "2375"
       WUD_TRIGGER_MQTT_HA_URL: ${WUD_MQTT_HA_URL}
@@ -177,6 +237,7 @@ services:
       WUD_TRIGGER_MQTT_HA_PASSWORD: ${WUD_MQTT_HA_PASS}
       WUD_TRIGGER_MQTT_HA_HASS_ENABLED: "true"
       WUD_TRIGGER_MQTT_HA_HASS_PREFIX: "homeassistant"
+      TZ: America/Edmonton
     networks:
       socket-proxy-net:
       vlan20_servers:
@@ -188,6 +249,8 @@ services:
       - "wud.watch=true"
       - "wud.update=true"
       - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 15s
@@ -200,15 +263,23 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
+          pids: 100
         reservations:
           memory: 64M
           cpus: '0.1'
 
   traccar:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     # Source: https://hub.docker.com/r/traccar/traccar
     # Update cadence: Security patches within 48h, minor versions monthly
     # Last reviewed: 2026-09-11
-    image: traccar/traccar:6.15.3-alpine
+    image: traccar/traccar:6.15.3-alpine@sha256:35346b4af46d57adaeff69a548a7d2cb189a2487fe9c24c99044ee7aa104b5df
     container_name: traccar
     mac_address: 02:20:0a:00:14:14
     <<: *default-logging
@@ -220,22 +291,20 @@ services:
       - /tmp:rw,noexec,nosuid,size=128m
     volumes:
       - /home/hassio/traccar/logs:/opt/traccar/logs
-      - ./config/traccar.xml:/opt/traccar/conf/traccar.xml:ro
     restart: unless-stopped
     networks:
       vlan20_servers:
         ipv4_address: 10.0.20.20
       infra-net:
     environment:
-      TRACCAR_DB_PASS: ${TRACCAR_DB_PASS}
+      CONFIG_USE_ENVIRONMENT_VARIABLES: "true"
+      DATABASE_DRIVER: "com.mysql.cj.jdbc.Driver"
+      DATABASE_URL: "jdbc:mysql://traccar-db:3306/traccar?allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC&useLocalSessionState=true"
+      DATABASE_USER: "traccar"
+      DATABASE_PASSWORD: ${TRACCAR_DB_PASS}
     depends_on:
       traccar-db:
         condition: service_healthy
-    labels:
-      - "autoheal=true"
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8082/api/server"]
       interval: 15s
@@ -247,15 +316,22 @@ services:
         limits:
           memory: 1024M
           cpus: '1.0'
+          pids: 100
         reservations:
           memory: 256M
           cpus: '0.25'
 
   traccar-db:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+      ## Ignore changes to digests to bring back latest ver num instead of tag
+      - "wud.watch.digest=false"
     # Source: https://hub.docker.com/_/mariadb
     # Update cadence: Security patches within 48h, minor versions monthly
     # Last reviewed: 2026-09-11
-    image: mariadb:10.11
+    image: mariadb:10.11@sha256:07c0aaff7396b74cb7975cba78257178d188e30f531a5db2b617c48beef13c41
     container_name: traccar-db
     <<: *default-logging
     security_opt:
@@ -266,13 +342,11 @@ services:
       - SETUID
       - DAC_OVERRIDE
       - FOWNER
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     # ROOT USER & CAP_ADD JUSTIFICATION:
     # Service: MariaDB (Traccar)
     # Reason: Starts as root and requires privileges to 
     #         initialize and chown the /var/lib/mysql data 
     #         directory on first boot before dropping privileges.
-    # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=128m
       - /run/mysqld:rw,noexec,nosuid,size=64m
@@ -287,11 +361,6 @@ services:
       MARIADB_DATABASE: traccar
       MARIADB_USER: traccar
       MARIADB_PASSWORD: ${TRACCAR_DB_PASS}
-    labels:
-      - "autoheal=true"
-      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
-      - "wud.watch=true"
-      - "wud.trigger.type=discord"
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 15s
@@ -303,10 +372,10 @@ services:
         limits:
           memory: 1024M
           cpus: '1.0'
+          pids: 200
         reservations:
           memory: 256M
           cpus: '0.25'
-
 
 networks:
   infra-net:
@@ -335,10 +404,3 @@ networks:
   traccar-net:
     driver: bridge
     internal: true
-
-
-
-
-
-
-

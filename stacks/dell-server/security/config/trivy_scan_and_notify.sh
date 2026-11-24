@@ -8,6 +8,9 @@ WEBHOOK_URL="${DISCORD_WEBHOOK_URL}"
 
 echo "[$(date -Iseconds)] Starting Trivy scan of running containers..."
 
+# Clean up old reports so patched containers don't leave ghost files behind
+rm -f /report/*_trivy-report.html
+
 # Query the Docker Socket Proxy for running containers
 IMAGES=$(curl -s "${DOCKER_HOST_API}/containers/json" | jq -r '.[].Image' | sort -u)
 
@@ -22,14 +25,15 @@ REPORT_PAYLOAD=""
 for image in $IMAGES; do
     echo "Scanning $image..."
     
+    # Wipe the /tmp named volume to ensure old scratch files (e.g. from massive PyTorch layers) don't bloat the disk
+    rm -rf /tmp/*
+    
     # Point Trivy's Docker client to the socket proxy
     export DOCKER_HOST="tcp://monitoring-socket-proxy:2375"
     
-    # Run scan, outputting JSON to a tmpfs location
-    # --ignore-unfixed: removes unactionable noise (maintainer hasn't patched yet)
-    # --severity HIGH,CRITICAL: focus only on high impact vulnerabilities
-    # --scanners vuln: only scan for vulnerabilities to save time
-    trivy image --quiet --ignore-unfixed --severity HIGH,CRITICAL --scanners vuln --format json -o /tmp/result.json "$image"
+    echo "Scanning $image for vulnerabilities..."
+    rm -f /tmp/result.json
+    trivy image --quiet --ignore-unfixed --ignorefile /.trivyignore --severity HIGH,CRITICAL --scanners vuln --format json -o /tmp/result.json "$image"
     
     # Check if results exist and parse
     if [ -f /tmp/result.json ]; then
@@ -42,8 +46,32 @@ for image in $IMAGES; do
             SUMMARY=$(jq -r '[.Results[]? | .Vulnerabilities[]? | "- \(.VulnerabilityID) (\(.Severity)): \(.PkgName)"] | unique | .[0:5] | join("\n")' /tmp/result.json)
             
             REPORT_PAYLOAD="${REPORT_PAYLOAD}\n**${image}** has ${VULN_COUNT} actionable vulnerabilities:\n${SUMMARY}\n"
+
+            # Generate HTML report ONLY for vulnerable images
+            # Replace both '/' and ':' with '_' for safe web/windows file names
+            SAFE_IMAGE_NAME=$(echo "$image" | tr ':/' '_')
+            echo "Generating HTML report for vulnerable image: $image..."
+            
+            # Note: The @/contrib path is explicitly absolute to ensure the docker image finds it
+            trivy image --quiet \
+              --ignore-unfixed \
+              --ignorefile /.trivyignore \
+              --severity HIGH,CRITICAL \
+              --scanners vuln \
+              --format template \
+              --template "@/contrib/html.tpl" \
+              -o "/report/${SAFE_IMAGE_NAME}_trivy-report.html" \
+              "$image"
+              
+            echo "HTML report generated."
+        else
+            echo "Zero actionable vulnerabilities. Skipping HTML generation."
         fi
     fi
+    
+    # Clear the fanal analysis cache for this image to prevent the tmpfs from filling up over many images.
+    # We do NOT use --all because we want to keep the downloaded vulnerability DB.
+    trivy clean --scan-cache
 done
 
 if [ "$TOTAL_VULNS" -gt 0 ]; then

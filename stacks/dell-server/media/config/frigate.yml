@@ -32,39 +32,43 @@ review:
       - cats walking through/loitering
       - birds loitering/interacting with trash
       - people visibly peeking over the fence into the backyard
-    activity_context_prompt: "### Normal Activity Indicators (Level 0)\n- Known/verified
-      people in any zone at any time\n- People with pets in any area\n- Deliveries
-      or services during daytime/evening (9 AM - 6 PM): carrying packages to doors/porches,
-      placing items, leaving\n- Services/maintenance workers with visible tools, uniforms,
-      or service vehicles during daytime\n- Activity confined to public areas only
-      (sidewalks, streets, alley) without entering property at any time\n\n### Suspicious
-      Activity Indicators (Level 1)\n- **Testing or attempting to open doors/windows/handles
-      on vehicles or buildings** — ALWAYS Level 1 regardless of time or duration\n\
-      - **Unidentified person in private areas ( near vehicles/buildings, in the Backyard
-      Parking Pad) during late night/early morning (11 PM - 5 AM)** — ALWAYS Level
-      1 regardless of activity or duration\n- Taking items that don't belong to them
-      (packages, objects from porches/driveways)\n- Climbing or jumping fences/barriers
-      to access property\n- Attempting to conceal actions or items from view\n- Prolonged
-      loitering: remaining in the same area without a visible purpose throughout most
-      of the sequence\n\n### Critical Threat Indicators (Level 2)\n- Holding break-in
-      tools (crowbars, pry bars, bolt cutters, etc.)\n- Weapons visible (guns, knives,
-      baseball bats used aggressively, etc.)\n- Forced entry in progress\n- Physical
-      aggression or violence\n- Active property damage or theft in progress\n- Harley
-      leaving without a person\n\n### Assessment Guidance\nEvaluate in this order:\n\
-      \n1. **If person is verified/known** → Level 0 regardless of time or activity\n\
-      2. **If person is unidentified:**\n- Check time: If late night/early morning
-      (9 PM - 6 AM) AND in private areas (driveways, near vehicles/buildings, main
-      Backyard Zone) → Level 1\n- Check actions: If testing doors/handles, taking
-      items, climbing → Level 1\n- Otherwise, if daytime/evening (9 AM - 6 PM) with
-      a clear legitimate purpose (delivery, service worker) → Level 0\n3. **Escalate
-      to Level 2 if:** Any kind of weapons, break-in tools, forced entry in progress,
-      violence, active property damage visible, if Harley leaves through the fence
-      gate without any person (escalates from Level 0 or 1)\n\nThe mere presence of
-      an unidentified person in private areas during late-night hours is inherently
-      suspicious and warrants human review, regardless of what activity they appear
-      to be doing or how brief the sequence is.\n\nSTRICT REQUIREMENT: Provide the
-      response ONLY as a raw, valid JSON object. Do not include markdown formatting,
-      conversational text, or code blocks.\n"
+    activity_context_prompt: |
+      ### Normal Activity Indicators (Level 0)
+      - Known/verified people in any zone at any time
+      - People with pets in any area
+      - Deliveries or services during daytime/evening (9 AM - 6 PM): carrying packages to doors/porches, placing items, leaving
+      - Services/maintenance workers with visible tools, uniforms, or service vehicles during daytime
+      - Activity confined to public areas only (sidewalks, streets, alley) without entering property at any time
+
+      ### Suspicious Activity Indicators (Level 1)
+      - **Testing or attempting to open doors/windows/handles on vehicles or buildings** — ALWAYS Level 1 regardless of time or duration
+      - **Unidentified person in private areas ( near vehicles/buildings, in the Backyard Parking Pad) during late night/early morning (11 PM - 5 AM)** — ALWAYS Level 1 regardless of activity or duration
+      - Taking items that don't belong to them (packages, objects from porches/driveways)
+      - Climbing or jumping fences/barriers to access property
+      - Attempting to conceal actions or items from view
+      - Prolonged loitering: remaining in the same area without a visible purpose throughout most of the sequence
+
+      ### Critical Threat Indicators (Level 2)
+      - Holding break-in tools (crowbars, pry bars, bolt cutters, etc.)
+      - Weapons visible (guns, knives, baseball bats used aggressively, etc.)
+      - Forced entry in progress
+      - Physical aggression or violence
+      - Active property damage or theft in progress
+      - Harley leaving without a person
+
+      ### Assessment Guidance
+      Evaluate in this order:
+
+      1. **If person is verified/known** → Level 0 regardless of time or activity
+      2. **If person is unidentified:**
+      - Check time: If late night/early morning (9 PM - 6 AM) AND in private areas (driveways, near vehicles/buildings, main Backyard Zone) → Level 1
+      - Check actions: If testing doors/handles, taking items, climbing → Level 1
+      - Otherwise, if daytime/evening (9 AM - 6 PM) with a clear legitimate purpose (delivery, service worker) → Level 0
+      3. **Escalate to Level 2 if:** Any kind of weapons, break-in tools, forced entry in progress, violence, active property damage visible, if Harley leaves through the fence gate without any person (escalates from Level 0 or 1)
+
+      The mere presence of an unidentified person in private areas during late-night hours is inherently suspicious and warrants human review, regardless of what activity they appear to be doing or how brief the sequence is.
+
+      STRICT REQUIREMENT: Provide the response ONLY as a raw, valid JSON object. Do not include markdown formatting, conversational text, or code blocks.
   alerts:
     labels:
       - person
@@ -88,39 +92,26 @@ review:
 objects:
   genai:
     enabled: true
-    prompt: "Analyze the {label} in these images from the {camera} security camera.
-      Focus on the actions, behaviour, and potential intent of the {label}, rather
-      than just describing its appearance, but don't skip describing its appearance
-      entirely.\nThe Backyard Camera has older infared night vision, so at night the
-      image is greyscale instead of color during the day. People/Objects may be moving
-      slowly, frame by frame movement may appear nearly stationary, but actually is
-      slightly moving.\n\n### Spatial Context for this Camera:\n- Backyard: The main
-      grass area in the view. There is a table, umbrella, and 0-4 chairs that don't
-      need to be mentioned unless involved in a Level 1 or 2 Alert. \n- Back_Alley:
-      The public alley access road going across the right and left near the top behind
-      the fence.\n- Parking_Pad: The car parking spot, in between the Backyard and
-      Alley, just outside of the fence gate.\n- Neighbours_Yard: Any backyard that
-      is not the main backyard or the alley. These normally have a motion mask enabled
-      unless the whole area needs to be monitored.\n"
+    prompt: |
+      Analyze the {label} in these images from the {camera} security camera. Focus on the actions, behaviour, and potential intent of the {label}, rather than just describing its appearance, but don't skip describing its appearance entirely.
+      The Backyard Camera has older infrared night vision, so at night the image is greyscale instead of color during the day. People/Objects may be moving slowly, frame by frame movement may appear nearly stationary, but actually is slightly moving.
+
+      ### Spatial Context for this Camera:
+      - Backyard: The main grass area in the view. There is a table, umbrella, and 0-4 chairs that don't need to be mentioned unless involved in a Level 1 or 2 Alert. 
+      - Back_Alley: The public alley access road going across the right and left near the top behind the fence.
+      - Parking_Pad: The car parking spot, in between the Backyard and Alley, just outside of the fence gate.
+      - Neighbours_Yard: Any backyard that is not the main backyard or the alley. These normally have a motion mask enabled unless the whole area needs to be monitored.
     object_prompts:
-      person: "Examine the main person in these images. What are they doing and what
-        might their actions suggest about their intent (e.g., approaching a door,
-        leaving an area, standing still)? Do not describe the surroundings or static
-        details.\nIf the person is recognized via {sub_label} as Ashton (owner/operator),
-        Kit (common-law partner), Tristan (friend), or Jeff (friend), note their presence
-        as normal and verified.\n"
-      car: "Observe the primary vehicle in these images. Focus on its movement, direction,
-        or purpose (e.g., parking, approaching, circling). If it's a delivery vehicle,
-        mention the company.\n"
-      cat: "Observe the cat in these images. Focus on its movement and intent (e.g.,
-        wandering, hunting, interacting with objects). If the cat is engaging in any
-        specific actions, mention it.\n"
-      dog: "Observe the dog in these images. Focus on its movement and intent (e.g.,
-        running, hunting, digging (digging spots are all in the Backyard; he usually
-        prefers digging in corners), barking). \nIf the dog is recognized via {sub_label}
-        as Harley, see if he is digging or barking at other animals. Harley interacting
-        with people other than Ashton, Kit, Jeff, or Tristan is abnormal and should
-        be immediately investigated.\n"
+      person: |
+        Examine the main person in these images. What are they doing and what might their actions suggest about their intent (e.g., approaching a door, leaving an area, standing still)? Do not describe the surroundings or static details.
+        If the person is recognized via {sub_label} as Ashton (owner/operator), Kit (common-law partner), Tristan (friend), or Jeff (friend), note their presence as normal and verified.
+      car: |
+        Observe the primary vehicle in these images. Focus on its movement, direction, or purpose (e.g., parking, approaching, circling). If it's a delivery vehicle, mention the company.
+      cat: |
+        Observe the cat in these images. Focus on its movement and intent (e.g., wandering, hunting, interacting with objects). If the cat is engaging in any specific actions, mention it.
+      dog: |
+        Observe the dog in these images. Focus on its movement and intent (e.g., running, hunting, digging (digging spots are all in the Backyard; he usually prefers digging in corners), barking). 
+        If the dog is recognized via {sub_label} as Harley, see if he is digging or barking at other animals. Harley interacting with people other than Ashton, Kit, Jeff, or Tristan is abnormal and should be immediately investigated.
     objects:
       - cat
       - dog
@@ -142,21 +133,39 @@ objects:
     - bird
   filters:
     person:
+      min_score: 0.6
+      min_area: 1500
+      max_area: 150000
+      max_ratio: 2.0
       threshold: 0.82
     bird:
+      min_score: 0.6
+      min_area: 1000
       max_area: 50000
       threshold: 0.8
     backpack:
       min_score: 0.8
+      min_area: 300
+      max_area: 40000
       threshold: 0.8
     car:
+      min_score: 0.6
+      min_area: 5000
       threshold: 0.8
     cat:
+      min_score: 0.6
+      min_area: 300
+      max_area: 50000
       threshold: 0.8
     dog:
+      min_score: 0.6
+      min_area: 500
+      max_area: 100000
       threshold: 0.8
-      min_ratio: 1.5
     frisbee:
+      min_score: 0.6
+      min_area: 100
+      max_area: 20000
       threshold: 0.8
 ffmpeg:
   hwaccel_args: preset-vaapi
@@ -171,14 +180,15 @@ record:
   enabled: true
   alerts:
     retain:
-      days: 30
+      days: 60
       mode: all
-    pre_capture: 30
+    pre_capture: 15
+    post_capture: 30
   detections:
-    pre_capture: 30
-    post_capture: 15
+    pre_capture: 15
+    post_capture: 30
     retain:
-      days: 30
+      days: 60
       mode: all
   continuous:
     days: 3
@@ -191,13 +201,13 @@ record:
 detect:
   enabled: true
   min_initialized: 5
-  max_disappeared: 70
+  max_disappeared: 30
   stationary:
-    interval: 25
+    interval: 50
     threshold: 25
   width: 1280
   height: 720
-  fps: 5
+  fps: 4
 audio:
   enabled: true
   listen:
@@ -280,21 +290,20 @@ go2rtc:
   streams:
     # 1. The WebRTC Stream (For the UI and Mic Button): Keeps the Opus speaker track intact
     backyard_camera_hq:
-      - rtsp://admin:023415@10.0.40.103:554/live/profile.0#tcp
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.40.103:554/live/profile.0#tcp
 
     # 2. The FFmpeg Stream (For Recording): Drops the Opus track to prevent FFmpeg from crashing
     backyard_camera_hq_ffmpeg:
-      - rtsp://admin:023415@10.0.40.103:554/live/profile.0#tcp#video=h264#audio=aac
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.40.103:554/live/profile.0#tcp#video=copy#audio=aac
 
     # LQ Stream: Force TCP, grab H264 video, completely drop all audio
     backyard_camera_lq:
-      - rtsp://admin:023415@10.0.40.103:554/live/profile.1#tcp#video=h264
+      - rtsp://admin:{FRIGATE_RTSP_PASSWORD}@10.0.40.103:554/live/profile.1#tcp#video=copy#audio=none
 
 cameras:
   backyard_camera_hq:
     enabled: true
     ffmpeg:
-      hwaccel_args: preset-vaapi
       output_args:
         record: preset-record-generic-audio-copy
       inputs:
@@ -378,7 +387,7 @@ cameras:
           coordinates: 
             0.328,0.198,0.338,0.276,0.272,0.329,0.207,0.356,0.154,0.357,0.115,0.356,0.111,0.296,0.149,0.287,0.189,0.285,0.215,0.271,0.243,0.259,0.275,0.24,0.299,0.214
       threshold: 33
-      contour_area: 10
+      contour_area: 30
       improve_contrast: true
     review:
       alerts:
