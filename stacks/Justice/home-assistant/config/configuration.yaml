@@ -15,7 +15,8 @@ system_log:
 frontend:
   themes: !include_dir_merge_named themes
 
-automation: !include automations.yaml
+automation ui: !include automations.yaml
+automation fleet: !include automations/Fleet_Alerts_Notifications.yaml
 script: !include scripts.yaml
 scene: !include scenes.yaml
 
