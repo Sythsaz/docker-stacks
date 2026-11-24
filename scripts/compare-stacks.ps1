@@ -8,7 +8,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string[]]$Stack = @('all')
+    [string[]]$Stack = @('all'),
+    [switch]$NoGui
 )
 
 $ErrorActionPreference = 'Stop'
@@ -97,9 +98,10 @@ foreach ($s in $targetStacks) {
             foreach ($file in $encFiles) {
                 $decName = $file.Name -replace '\.enc$', ''
                 $remoteSecretNames += $decName
-                # Stream via CMD stdin with install -m 600 to avoid SCP umask race and PS line-endings
+                # Copy via SCP and set mode 600 in RAM disk
                 $localPath = "$secTemp\secrets\$decName"
-                cmd.exe /c "ssh -i `"$sshKey`" -o BatchMode=yes -o StrictHostKeyChecking=yes -q ${remoteUser}@${remoteHost} install -m 600 /dev/stdin /dev/shm/$decName < `"$localPath`""
+                scp -i "$sshKey" -o BatchMode=yes -o StrictHostKeyChecking=yes -q "$localPath" "${remoteUser}@${remoteHost}:/dev/shm/$decName"
+                ssh @sshArgs "chmod 600 /dev/shm/$decName"
             }
 
             $remoteConfig = (ssh @sshArgs "cd $remoteDir && docker compose config 2>/dev/null") -join "`n"
@@ -172,7 +174,9 @@ foreach ($s in $targetStacks) {
         [System.IO.File]::WriteAllText($localTemp, $localConfig, $utf8NoBom)
         [System.IO.File]::WriteAllText($remoteTemp, $remoteConfig, $utf8NoBom)
 
-        code --diff $localTemp $remoteTemp
+        if (-not $NoGui) {
+            code --diff $localTemp $remoteTemp
+        }
     }
 }
 
