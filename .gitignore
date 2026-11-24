@@ -57,3 +57,5 @@ archive/
 trivy reports/
 .kilo/
 **/integrations_list_from_pyscript.txt
+__pycache__/
+*.py[cod]
