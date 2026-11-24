@@ -1,10 +1,14 @@
 # ==============================================================================
-# Fleet Alerts & Self-Healing Notifications (Syth Hub — Primary Action Triage)
+# Fleet Alerts & Self-Healing Notifications (Syth Hub — Unified Action Triage)
+# Covers: OPNsense Gateway/Services/SMART, Docker, Linux Servers, Desktop/Laptops
 # ==============================================================================
 
+# ------------------------------------------------------------------------------
+# 1. Primary Ingestion Engine for All Fleet Webhook Alerts
+# ------------------------------------------------------------------------------
 - id: 'fleet_alerts_notification_engine'
   alias: 'Fleet Alerts & Self-Healing Notifications'
-  description: 'Ingests fleet events, handles all severity levels, creates persistent dashboard notifications, dispatches actionable mobile notifications to Syth with prompts, and auto-dismisses on resolution.'
+  description: 'Ingests fleet events, handles all severity levels, creates persistent dashboard notifications, dispatches actionable mobile notifications to Syth with dynamic action prompts, and auto-dismisses on resolution.'
   triggers:
     - trigger: webhook
       webhook_id: fleet_alert
@@ -23,10 +27,12 @@
         notif_id: "{{ payload.get('notification_id') | default('fleet_' ~ notif_tag, true) }}"
         alert_title: "{{ payload.get('title') | default('[' ~ sev ~ '] ' ~ host ~ ': ' ~ metric_name, true) }}"
         alert_msg: "{{ payload.get('message') | default(payload.get('msg') | default(payload.get('text') | default('Alert event reported from ' ~ host, true), true), true) }}"
-        target_url: "{{ payload.get('url') | default('/lovelace', true) }}"
+        is_opnsense: "{{ 'opnsense' in host.lower() or 'opnsense' in metric_name.lower() }}"
+        target_url: "{{ payload.get('url') | default(('https://10.0.1.2:8443' if is_opnsense else '/lovelace'), true) }}"
+        can_wake: "{{ host.lower() in ['desktop', 'stream-pc', 'desk-j', 'u5e7nrv'] and ('unreachable' in alert_msg.lower() or 'offline' in alert_msg.lower() or 'wake' in alert_msg.lower()) }}"
 
     - choose:
-        # 1. RESOLVED / OK / CLEARED -> Auto-Dismiss Active Notification & Clear Phone
+        # A. RESOLVED / OK / CLEARED -> Auto-Dismiss Active Notification & Clear Phone
         - conditions:
             - condition: template
               value_template: "{{ sev in ['RESOLVED', 'OK', 'CLEARED'] }}"
@@ -41,7 +47,7 @@
                 data:
                   tag: "{{ notif_tag }}"
 
-        # 2. CRITICAL or ERROR -> High Priority Alert with Audio & Action Buttons
+        # B. CRITICAL or ERROR -> High Priority Alert with Audio & Action Buttons
         - conditions:
             - condition: template
               value_template: "{{ sev in ['CRITICAL', 'ERROR', 'FATAL'] }}"
@@ -76,14 +82,25 @@
                       name: default
                       critical: 1
                       volume: 1.0
-                  actions:
-                    - action: "URI"
-                      title: "Open Dashboard"
-                      uri: "{{ target_url }}"
-                    - action: "ACK_ALERT_{{ notif_tag }}"
-                      title: "Acknowledge"
+                  actions: >
+                    {% if can_wake %}
+                      [
+                        {"action": "WAKE_{{ host.lower() }}", "title": "Wake {{ host }}"},
+                        {"action": "ACK_ALERT_{{ notif_tag }}", "title": "Acknowledge"}
+                      ]
+                    {% elif is_opnsense %}
+                      [
+                        {"action": "URI", "title": "Open OPNsense", "uri": "{{ target_url }}"},
+                        {"action": "ACK_ALERT_{{ notif_tag }}", "title": "Acknowledge"}
+                      ]
+                    {% else %}
+                      [
+                        {"action": "URI", "title": "Open Dashboard", "uri": "{{ target_url }}"},
+                        {"action": "ACK_ALERT_{{ notif_tag }}", "title": "Acknowledge"}
+                      ]
+                    {% endif %}
 
-        # 3. WARN -> Standard Alert with Action Buttons
+        # C. WARN -> Standard Alert with Action Buttons
         - conditions:
             - condition: template
               value_template: "{{ sev in ['WARN', 'WARNING'] }}"
@@ -113,14 +130,25 @@
                   url: "{{ target_url }}"
                   push:
                     sound: default
-                  actions:
-                    - action: "URI"
-                      title: "Open Dashboard"
-                      uri: "{{ target_url }}"
-                    - action: "ACK_ALERT_{{ notif_tag }}"
-                      title: "Acknowledge"
+                  actions: >
+                    {% if can_wake %}
+                      [
+                        {"action": "WAKE_{{ host.lower() }}", "title": "Wake {{ host }}"},
+                        {"action": "ACK_ALERT_{{ notif_tag }}", "title": "Acknowledge"}
+                      ]
+                    {% elif is_opnsense %}
+                      [
+                        {"action": "URI", "title": "Open OPNsense", "uri": "{{ target_url }}"},
+                        {"action": "ACK_ALERT_{{ notif_tag }}", "title": "Acknowledge"}
+                      ]
+                    {% else %}
+                      [
+                        {"action": "URI", "title": "Open Dashboard", "uri": "{{ target_url }}"},
+                        {"action": "ACK_ALERT_{{ notif_tag }}", "title": "Acknowledge"}
+                      ]
+                    {% endif %}
 
-        # 4. INFO / DEFAULT -> Low Priority Silent Notification
+        # D. INFO / DEFAULT -> Low Priority Silent Notification
         - conditions: []
           sequence:
             - action: notify.mobile_app_syth
@@ -141,8 +169,7 @@
   max: 30
 
 # ------------------------------------------------------------------------------
-# Action Handler: Dismiss Persistent Notification when Syth Taps [Acknowledge]
-# Also dispatches remote clearance to Justice's HA for synchronized dismiss.
+# 2. Action Handler: Acknowledge & Dismiss Persistent Notifications
 # ------------------------------------------------------------------------------
 - id: 'fleet_alerts_dismiss_handler'
   alias: 'Fleet Alerts Acknowledge & Dismiss Handler'
@@ -177,3 +204,252 @@
             metric: "{{ notif_tag }}"
   mode: parallel
   max: 10
+
+# ------------------------------------------------------------------------------
+# 3. Action Handler: Wake-on-LAN Trigger from Notification
+# ------------------------------------------------------------------------------
+- id: 'fleet_alerts_wol_handler'
+  alias: 'Fleet Alerts Wake-on-LAN Handler'
+  description: 'Sends Wake-on-LAN magic packets when Syth taps [Wake Host] on a notification prompt.'
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+  conditions:
+    - condition: template
+      value_template: "{{ trigger.event.data.get('action') is string and trigger.event.data.action.startswith('WAKE_') }}"
+  actions:
+    - variables:
+        node: "{{ trigger.event.data.action.replace('WAKE_', '').lower() }}"
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ node in ['desktop', 'u5e7nrv'] }}"
+          sequence:
+            - action: wake_on_lan.send_magic_packet
+              data:
+                mac: "30:85:a9:9b:a7:8f"
+                broadcast_address: "10.0.1.255"
+        - conditions:
+            - condition: template
+              value_template: "{{ node in ['stream-pc', 'streampc', '3pnv5bo'] }}"
+          sequence:
+            - action: wake_on_lan.send_magic_packet
+              data:
+                mac: "b8:ca:3a:93:bf:d3"
+                broadcast_address: "10.0.1.255"
+        - conditions:
+            - condition: template
+              value_template: "{{ node in ['desk-j', 'deskj'] }}"
+          sequence:
+            - action: wake_on_lan.send_magic_packet
+              data:
+                mac: "24:4b:fe:8d:c7:07"
+                broadcast_address: "10.0.0.255"
+    - action: notify.mobile_app_syth
+      continue_on_error: true
+      data:
+        title: "📡 WoL Packet Sent"
+        message: "Magic packet dispatched to {{ node }}."
+  mode: parallel
+  max: 5
+
+# ------------------------------------------------------------------------------
+# 4. Native Monitor: OPNsense WAN Gateway Offline & Recovery
+# ------------------------------------------------------------------------------
+- id: 'fleet_opnsense_wan_monitor'
+  alias: 'Fleet Monitor - OPNsense WAN Gateway'
+  description: 'Alerts Syth immediately if OPNsense WAN gateway goes offline, and auto-dismisses on recovery.'
+  triggers:
+    - trigger: state
+      entity_id: sensor.opnsense_gateway_wan_dhcp_status
+      to: 'offline'
+      id: 'wan_offline'
+    - trigger: state
+      entity_id: sensor.opnsense_gateway_wan_dhcp_status
+      to: 'online'
+      id: 'wan_online'
+  conditions: []
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: 'wan_offline'
+          sequence:
+            - action: persistent_notification.create
+              data:
+                title: "🚨 [CRITICAL] OPNsense: WAN Gateway Offline"
+                message: |
+                  **Primary WAN gateway is offline!**
+
+                  - **Loss:** `{{ states('sensor.opnsense_gateway_wan_dhcp_loss') }}%`
+                  - **Delay:** `{{ states('sensor.opnsense_gateway_wan_dhcp_delay') }}ms`
+                  - **Timestamp:** `{{ now().strftime('%Y-%m-%d %H:%M:%S') }}`
+                notification_id: "fleet_opnsense_wan_gateway"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                title: "🚨 [CRITICAL] OPNsense: WAN Gateway Offline"
+                message: "Primary WAN gateway offline (Loss: {{ states('sensor.opnsense_gateway_wan_dhcp_loss') }}%, Delay: {{ states('sensor.opnsense_gateway_wan_dhcp_delay') }}ms)"
+                data:
+                  tag: "opnsense_wan_gateway"
+                  group: "fleet-alerts"
+                  channel: "Fleet Critical"
+                  importance: high
+                  priority: high
+                  color: "#E53935"
+                  clickAction: "https://10.0.1.2:8443"
+                  url: "https://10.0.1.2:8443"
+                  push:
+                    sound:
+                      name: default
+                      critical: 1
+                      volume: 1.0
+                  actions:
+                    - action: "URI"
+                      title: "Open OPNsense"
+                      uri: "https://10.0.1.2:8443"
+                    - action: "ACK_ALERT_opnsense_wan_gateway"
+                      title: "Acknowledge"
+        - conditions:
+            - condition: trigger
+              id: 'wan_online'
+          sequence:
+            - action: persistent_notification.dismiss
+              data:
+                notification_id: "fleet_opnsense_wan_gateway"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                message: "clear_notification"
+                data:
+                  tag: "opnsense_wan_gateway"
+  mode: restart
+
+# ------------------------------------------------------------------------------
+# 5. Native Monitor: OPNsense Core Services Stopped
+# ------------------------------------------------------------------------------
+- id: 'fleet_opnsense_services_monitor'
+  alias: 'Fleet Monitor - OPNsense Core Services'
+  description: 'Alerts Syth if core OPNsense daemons (DNS, IDS, DHCP, Tailscale) stop unexpectedly.'
+  triggers:
+    - trigger: state
+      entity_id:
+        - switch.opnsense_service_unbound_dns_status
+        - switch.opnsense_service_intrusion_detection_status
+        - switch.opnsense_service_kea_dhcpv4_server_status
+        - switch.opnsense_service_tailscale_status
+      to: 'off'
+      for:
+        minutes: 2
+      id: 'svc_down'
+    - trigger: state
+      entity_id:
+        - switch.opnsense_service_unbound_dns_status
+        - switch.opnsense_service_intrusion_detection_status
+        - switch.opnsense_service_kea_dhcpv4_server_status
+        - switch.opnsense_service_tailscale_status
+      to: 'on'
+      id: 'svc_up'
+  conditions: []
+  actions:
+    - variables:
+        svc_name: "{{ trigger.to_state.attributes.friendly_name | default(trigger.to_state.object_id) }}"
+        svc_tag: "opnsense_{{ trigger.to_state.object_id }}"
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: 'svc_down'
+          sequence:
+            - action: persistent_notification.create
+              data:
+                title: "🚨 [CRITICAL] OPNsense: {{ svc_name }} Stopped"
+                message: |
+                  **OPNsense core service `{{ svc_name }}` has stopped!**
+
+                  - **Service:** `{{ trigger.entity_id }}`
+                  - **Timestamp:** `{{ now().strftime('%Y-%m-%d %H:%M:%S') }}`
+                notification_id: "fleet_{{ svc_tag }}"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                title: "🚨 [CRITICAL] OPNsense: {{ svc_name }} Stopped"
+                message: "Core service {{ svc_name }} has stopped on OPNsense gateway."
+                data:
+                  tag: "{{ svc_tag }}"
+                  group: "fleet-alerts"
+                  channel: "Fleet Critical"
+                  importance: high
+                  priority: high
+                  color: "#E53935"
+                  clickAction: "https://10.0.1.2:8443"
+                  url: "https://10.0.1.2:8443"
+                  actions:
+                    - action: "URI"
+                      title: "Open OPNsense"
+                      uri: "https://10.0.1.2:8443"
+                    - action: "ACK_ALERT_{{ svc_tag }}"
+                      title: "Acknowledge"
+        - conditions:
+            - condition: trigger
+              id: 'svc_up'
+          sequence:
+            - action: persistent_notification.dismiss
+              data:
+                notification_id: "fleet_{{ svc_tag }}"
+            - action: notify.mobile_app_syth
+              continue_on_error: true
+              data:
+                message: "clear_notification"
+                data:
+                  tag: "{{ svc_tag }}"
+  mode: parallel
+  max: 10
+
+# ------------------------------------------------------------------------------
+# 6. Native Monitor: OPNsense Storage SMART Diagnostics
+# ------------------------------------------------------------------------------
+- id: 'fleet_opnsense_smart_monitor'
+  alias: 'Fleet Monitor - OPNsense SMART Storage'
+  description: 'Alerts Syth immediately if OPNsense storage drive reports SMART failure.'
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.office_opnsense_smart_ada0_status
+      to: 'on'
+  conditions: []
+  actions:
+    - action: persistent_notification.create
+      data:
+        title: "🚨 [CRITICAL] OPNsense: SMART Storage Failure"
+        message: |
+          **SMART diagnostic failure reported on OPNsense drive ada0!**
+
+          - **Drive:** `ada0`
+          - **Temperature:** `{{ states('sensor.office_opnsense_smart_ada0_temperature') }}°C`
+          - **Timestamp:** `{{ now().strftime('%Y-%m-%d %H:%M:%S') }}`
+        notification_id: "fleet_opnsense_smart_ada0"
+    - action: notify.mobile_app_syth
+      continue_on_error: true
+      data:
+        title: "🚨 [CRITICAL] OPNsense: SMART Failure"
+        message: "SMART diagnostic failure reported on OPNsense primary drive ada0!"
+        data:
+          tag: "opnsense_smart_ada0"
+          group: "fleet-alerts"
+          channel: "Fleet Critical"
+          importance: high
+          priority: high
+          color: "#E53935"
+          clickAction: "https://10.0.1.2:8443"
+          url: "https://10.0.1.2:8443"
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+          actions:
+            - action: "URI"
+              title: "Open OPNsense"
+              uri: "https://10.0.1.2:8443"
+            - action: "ACK_ALERT_opnsense_smart_ada0"
+              title: "Acknowledge"
+  mode: single
