@@ -1,0 +1,360 @@
+x-logging: &default-logging
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "3"
+      tag: "{{.Name}}/{{.ID}}"
+
+services:
+  homeassistant:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    image: ghcr.io/home-assistant/home-assistant:2026.11.0@sha256:c6c1ca9931036bf3a2c4cc088d8db25dfea3b33935a5ecc83c40349462e2f69e
+    container_name: homeassistant
+    mac_address: 02:42:0a:00:14:37
+    <<: *default-logging
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.37
+        priority: 1000
+      z_ha-net:
+        priority: 10
+    environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      TZ: America/Edmonton
+    # CAP_ADD JUSTIFICATION:
+    # Service: Home Assistant
+    # Reason: Requires network admin/raw for ping tracking, DHCP 
+    #         discovery, and raw L2 access.
+    # MACVLAN JUSTIFICATION:
+    # Reason: Requires raw L2 access for mDNS discovery, SSDP,
+    #         HomeKit, and Thread border router communication.
+    # Mitigations: Container runs on dedicated IoT VLAN interface.
+    #              OPNsense firewall restricts ingress to IoT subnet only.
+    volumes:
+      - /home/hassio/docker/home-assistant:/config
+      - ./config/configuration.yaml:/config/configuration.yaml:ro
+      - ./config/automations:/config/automations:ro
+      - ./config/scripts:/config/scripts:ro
+      - ./config/pyscript:/config/pyscript:ro
+      - ./config/python_scripts:/config/python_scripts:ro
+      - ./config/templates:/config/templates:ro
+      - ./config/secrets.yaml:/config/secrets.yaml:ro
+      - /run/dbus:/run/dbus:ro
+      - postgres_socket:/var/run/postgresql
+    devices:
+      - /dev/ttyACM0:/dev/ttyACM0
+      - /dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2434514-if00:/dev/serial/by-id/usb-dresden_elektronik_ingenieurtechnik_GmbH_ConBee_II_DE2434514-if00
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8123/manifest.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+          pids: 500
+        reservations:
+          memory: 512M
+          cpus: '0.25'
+
+  db:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.trigger.type=discord"
+    image: postgres:16.4-alpine@sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c
+    container_name: homeassistant-db
+    <<: *default-logging
+    user: "70:70"
+    security_opt:
+      - no-new-privileges:true
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - FOWNER
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    volumes:
+      - /home/hassio/docker/postgres:/var/lib/postgresql/data
+      - postgres_socket:/var/run/postgresql
+    restart: unless-stopped
+    networks:
+      - z_ha-net
+    environment:
+      POSTGRES_USER: hassio
+      POSTGRES_DB: homeassistant
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+    command: >
+      postgres
+      -c 'max_connections=100'
+      -c 'shared_buffers=2GB'
+      -c 'work_mem=32MB'
+      -c 'maintenance_work_mem=256MB'
+      -c 'effective_cache_size=6GB'
+      -c 'synchronous_commit=off'
+      -c 'checkpoint_timeout=15min'
+      -c 'checkpoint_completion_target=0.9'
+      -c 'random_page_cost=1.1'
+      -c 'effective_io_concurrency=200'
+      -c 'max_worker_processes=4'
+      -c 'max_parallel_workers_per_gather=2'
+      -c 'max_parallel_workers=4'
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+          pids: 200
+        reservations:
+          memory: 256M
+          cpus: '1.0'
+
+  esphome:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+    image: esphome/esphome:2026.9.0@sha256:9959730a04c7ee38d61805681778ba5c41aa9c5d72b1ed1e910a83fa572fe18b
+    container_name: esphome
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    volumes:
+      - /home/hassio/docker/esphome:/config
+    environment:
+      TZ: America/Edmonton
+    restart: unless-stopped
+    # HOST NETWORK JUSTIFICATION:
+    # Service: ESPHome
+    # Reason: Requires raw mDNS/UDP broadcast access to discover 
+    #         new unprovisioned ESP microcontroller boards on the LAN.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6052"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: '1.0'
+          pids: 100
+
+  nodered:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+    image: nodered/node-red:4.0.2@sha256:a649dd711d55490151a2c39a8e48ad0c44325488fbc0e66315f2d2e19e5e1ace
+    container_name: nodered
+    mac_address: 02:42:0a:00:14:38
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.38
+    <<: *default-logging
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:rw,exec,nosuid,size=128m
+    environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      TZ: America/Edmonton
+    volumes:
+      # /data/node_modules needs to be writable
+      - /home/hassio/docker/nodered:/data
+      - ./config/nodered_settings.js:/data/settings.js:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:1880/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+          pids: 100
+
+  grocy:
+    labels:
+      - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+      - "wud.watch=true"
+      - "wud.update=true"
+      - "wud.update.type=patch"
+    # Source: https://docs.linuxserver.io/images/docker-grocy/
+    # Update cadence: Security patches within 48h, minor versions monthly
+    # Last reviewed: 2026-11-13
+    image: lscr.io/linuxserver/grocy:4.7.1@sha256:e4e34a0a84f407b1bcd2c3b6cd1999bf99bcad1defa8847adea7dc82a9cd6b8c
+    container_name: grocy
+    mac_address: 02:42:0a:00:14:45
+    networks:
+      vlan20_servers:
+        ipv4_address: 10.0.20.45
+    <<: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # CAP_ADD JUSTIFICATION:
+    # Service: Grocy (LinuxServer s6-overlay v3)
+    # Reason: s6-overlay initializes as root to map PUID/PGID and configure
+    #         nginx/php-fpm runtime permissions before dropping privileges.
+    cap_add:
+      - CHOWN            # Required by s6-init to chown /config and runtime dirs
+      - SETUID           # Required by s6-overlay to drop privileges to PUID 1000
+      - SETGID           # Required by s6-overlay to drop privileges to PGID 1000
+      - DAC_OVERRIDE     # Required by nginx/php-fpm master processes during init
+      - FOWNER           # Required by s6-init for permission adjustments on /config
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      - /run:rw,exec,nosuid,size=32m
+    environment:
+      CONFIG_HASH: ${STACK_CONFIG_HASH:-}
+      PUID: "1000"
+      PGID: "1000"
+      TZ: America/Edmonton
+    volumes:
+      - /home/hassio/docker/grocy:/config
+    ports:
+      - 9283:80
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://localhost:80/login"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.50'
+          pids: 100
+        reservations:
+          memory: 128M
+          cpus: '0.10'
+
+  # piper:
+  #   labels:
+  #     - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+  #     - "wud.watch=true"
+  #     - "wud.update=true"
+  #     - "wud.update.type=patch"
+  #   image: rhasspy/wyoming-piper:latest@sha256:7d39aafac409c2b6b09d999ed04d84c311d632e558b35baa60fad6aac722af7a
+  #   container_name: piper
+  #   <<: *default-logging
+  #   user: "1000:1000"
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   cap_drop:
+  #     - ALL
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp:rw,noexec,nosuid,size=64m
+  #   environment:
+  #     - TZ=America/Edmonton
+  #   volumes:
+  #     - /home/hassio/docker/piper:/data
+  #   ports:
+  #     - "127.0.0.1:10200:10200"
+  #   command: --voice en_US-ryan-high
+  #   restart: unless-stopped
+  #   networks:
+  #     - z_ha-net
+  #   healthcheck:
+  #     test: ["CMD", "python3", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect((\"localhost\",10200))"]
+  #     interval: 15s
+  #     timeout: 3s
+  #     retries: 3
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 1024M
+  #         cpus: '1.0'
+  #         pids: 100
+
+  # whisper:
+  #   labels:
+  #     - "wud.tag.include=^\\d+\\.\\d+\\.\\d+$$"
+  #     - "wud.watch=true"
+  #     - "wud.update=true"
+  #     - "wud.update.type=patch"
+  #   image: rhasspy/wyoming-whisper:latest@sha256:ba6fcb6056ebe237d15a325381763a80af2fc8fcedaa04f6a714a7375eb20d80
+  #   container_name: whisper
+  #   <<: *default-logging
+  #   user: "1000:1000"
+  #   security_opt:
+  #     - no-new-privileges:true
+  #   cap_drop:
+  #     - ALL
+  #   read_only: true
+  #   tmpfs:
+  #     - /tmp:rw,noexec,nosuid,size=64m
+  #   environment:
+  #     TZ: America/Edmonton
+  #   volumes:
+  #     - /home/hassio/docker/whisper:/data
+  #   ports:
+  #     - "127.0.0.1:10300:10300"
+  #   command: --model distil-large-v3
+  #   restart: unless-stopped
+  #   networks:
+  #     - z_ha-net
+  #   healthcheck:
+  #     test: ["CMD", "python3", "-c", "import socket;s=socket.socket();s.settimeout(2);s.connect((\"localhost\",10300))"]
+  #     interval: 15s
+  #     timeout: 3s
+  #     retries: 3
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         memory: 3072M
+  #         cpus: '1.0'
+  #         pids: 300
+
+networks:
+  z_ha-net:
+    driver: bridge
+    internal: true
+  proxy-net:
+    external: true
+  vlan20_servers:
+    name: infrastructure_vlan20_servers
+    external: true
+
+volumes:
+  postgres_socket:
