@@ -20,9 +20,9 @@ $ErrorActionPreference = 'Stop'
 
 # ── STACK PRIORITY TIERS ─────────────────────────────────────
 $tiers = @{
-    Critical = @("infrastructure")
+    Critical   = @("infrastructure")
     Monitoring = @("monitoring")
-    Streaming = @("streaming")
+    Streaming  = @("streaming")
     Background = @("home-automation", "backups")
 }
 
@@ -54,12 +54,34 @@ switch ($Mode) {
     }
 }
 
+$logFile = "D:\_Consolidation_Manifests\Logs\Docker_Stack_Mode.log"
+$utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+function Write-ModeLog {
+    param([string]$Message)
+    try {
+        $parent = Split-Path $logFile -Parent
+        if ($parent -and -not (Test-Path -LiteralPath $parent)) {
+            New-Item -Path $parent -ItemType Directory -Force | Out-Null
+        }
+        [System.IO.File]::AppendAllText($logFile, "[$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')] $Message`r`n", $utf8NoBom)
+    } catch {}
+}
+
+& docker info 2>$null | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[SKIP] Local Docker daemon is not running; mode [$Mode] no-op." -ForegroundColor Yellow
+    Write-ModeLog "[SKIP] Local Docker daemon offline; mode [$Mode] no-op."
+    return
+}
+
 foreach ($stack in $toPause) {
     $composeFile = Join-Path $baseDir "$stack\compose.yaml"
     if (Test-Path $composeFile) {
-        if ($PSCmdlet.ShouldProcess($stack, "Pause")) {
+        $running = @(& docker compose -f $composeFile ps --status running -q 2>$null | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($running.Count -gt 0 -and $PSCmdlet.ShouldProcess($stack, "Pause")) {
             Write-Host "  ⏸  Pausing: $stack" -ForegroundColor Yellow
-            docker compose -f $composeFile pause 2>&1
+            & docker compose -f $composeFile pause 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Failed pausing stack $stack (exit $LASTEXITCODE)" }
         }
     }
 }
@@ -67,42 +89,16 @@ foreach ($stack in $toPause) {
 foreach ($stack in $toResume) {
     $composeFile = Join-Path $baseDir "$stack\compose.yaml"
     if (Test-Path $composeFile) {
-        if ($PSCmdlet.ShouldProcess($stack, "Resume")) {
+        $paused = @(& docker compose -f $composeFile ps --status paused -q 2>$null | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($paused.Count -gt 0 -and $PSCmdlet.ShouldProcess($stack, "Resume")) {
             Write-Host "  ▶  Resuming: $stack" -ForegroundColor Green
-            docker compose -f $composeFile unpause 2>&1
+            & docker compose -f $composeFile unpause 2>&1
+            if ($LASTEXITCODE -ne 0) { throw "Failed unpausing stack $stack (exit $LASTEXITCODE)" }
         }
     }
 }
 
-# Dispatch audit log via VaultOp.ps1 using centralized variable
-$vaultOp = "C:\Users\ashto\Docker\scripts\VaultOp.ps1"
-if (Test-Path $vaultOp) {
-    $vaultOpAcl = Get-Acl $vaultOp
-    $isSafe = $true
-    $currentUserSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $allowedSids = @('S-1-5-18', 'S-1-5-32-544', $currentUserSid)
-    
-    foreach ($rule in $vaultOpAcl.Access) {
-        if ($rule.FileSystemRights -match "Write|Modify|FullControl") {
-            try {
-                $ruleSid = $rule.IdentityReference.Translate([System.Security.Principal.SecurityIdentifier]).Value
-                if ($ruleSid -notin $allowedSids) { $isSafe = $false; break }
-            }
-            catch { $isSafe = $false; break }
-        }
-    }
-    
-    if (-not $isSafe) {
-        Write-Host "CRITICAL SECURITY WARNING: VaultOp.ps1 is writable by unauthorized users! Execution blocked." -ForegroundColor Red
-    }
-    else {
-        try {
-            $processArgs = "-ExecutionPolicy Bypass -Command "& '$vaultOp' -Action 'System Mode Changed' -Details 'Local stack mode adjusted to: $Mode'""
-            Start-Process -FilePath "powershell.exe" -ArgumentList $processArgs -NoNewWindow -Wait
-        }
-        catch { Write-Host "Warning: VaultOp logging failed. $($_.Exception.Message)" -ForegroundColor Yellow }
-    }
-}
+Write-ModeLog "[MODE_CHANGE] Local Docker stack mode adjusted to: $Mode"
 
 Write-Host "
 Mode [$Mode] applied." -ForegroundColor Cyan

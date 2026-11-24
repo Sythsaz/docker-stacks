@@ -60,11 +60,17 @@ elseif ($domainPart -eq "homeassistant-pos") {
     $remoteUser = "hassio"
     $remoteHost = "homeassistant-pos"
     $remoteBaseDir = "/home/hassio/docker"
+    if ([string]::IsNullOrWhiteSpace($ProjectId)) {
+        $ProjectId = "5c473f5d-c2b1-4409-9414-89776e09d30c"
+    }
 }
 elseif ($domainPart -eq "dell-server") {
     $remoteUser = "hassio"
     $remoteHost = "10.0.20.221"
     $remoteBaseDir = "/home/hassio/docker"
+    if ([string]::IsNullOrWhiteSpace($ProjectId)) {
+        $ProjectId = "cde51520-641c-4eeb-bf2b-b38c6b0efadb"
+    }
 }
 else {
     throw "Unknown stack domain '$domainPart'. Expected 'Justice', 'homeassistant-pos', or 'dell-server'."
@@ -107,9 +113,11 @@ $isHomeAssistant = $false
 $haSecretsPath = ""
 if ($service -eq "home-assistant") {
     if ($domainPart -eq "Justice") {
+        $infisicalPath = "/home-assistant"
         $haSecretsPath = "/home-assistant/secrets"
     }
     else {
+        $infisicalPath = "/infrastructure/home-assistant"
         $haSecretsPath = "/infrastructure/home-assistant/secrets"
     }
     $isHomeAssistant = $true
@@ -242,7 +250,8 @@ if ($DeploymentMode -eq 'Infisical') {
         }
         if ($ForceRecreate) {
             $remoteCmd += "infisical run --domain `"`$INFISICAL_DOMAIN`" --projectId `"$ProjectId`" --env prod --path `"$infisicalPath`" -- docker compose -f compose.yaml up -d --remove-orphans --force-recreate --wait"
-        } else {
+        }
+        else {
             $remoteCmd += "infisical run --domain `"`$INFISICAL_DOMAIN`" --projectId `"$ProjectId`" --env prod --path `"$infisicalPath`" -- docker compose -f compose.yaml up -d --remove-orphans --wait"
         }
     }
@@ -275,7 +284,8 @@ else {
         }
         if ($ForceRecreate) {
             $remoteCmd += "docker compose -f compose.yaml up -d --remove-orphans --force-recreate --wait"
-        } else {
+        }
+        else {
             $remoteCmd += "docker compose -f compose.yaml up -d --remove-orphans --wait"
         }
     }
@@ -327,7 +337,8 @@ if ($isHomeAssistant) {
 
 if ($DeploymentMode -eq 'Infisical') {
     Write-Host "Executing deployment via Infisical Zero-Trust Agent on remote host..." -ForegroundColor Cyan
-} else {
+}
+else {
     Write-Host "Executing deployment via Standard Docker Compose on remote host..." -ForegroundColor Cyan
 }
 

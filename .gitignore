@@ -51,3 +51,9 @@ scripts/VaultOp.ps1
 secrets.yaml
 password_file
 password_file*
+
+# Local Migration Archives, Reports & Tooling (Never Commit)
+archive/
+trivy reports/
+.kilo/
+**/integrations_list_from_pyscript.txt
