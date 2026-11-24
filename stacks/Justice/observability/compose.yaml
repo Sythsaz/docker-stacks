@@ -70,6 +70,7 @@ services:
       AUTOHEAL_START_PERIOD: 60
       AUTOHEAL_DEFAULT_STOP_TIMEOUT: 10
       AUTOHEAL_WEBHOOK_URL: http://100.79.211.101:8123/api/webhook/fleet_alert
+      WEBHOOK_URL: http://100.79.211.101:8123/api/webhook/fleet_alert
       DOCKER_SOCK: /var/run/docker.sock
       TZ: ${TZ:-America/Edmonton}
     volumes:

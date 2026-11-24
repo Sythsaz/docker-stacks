@@ -15,17 +15,18 @@
   conditions: []
   actions:
     - variables:
-        sev: "{{ (trigger.json.severity | default('WARN')) | upper }}"
-        host: "{{ trigger.json.hostname | default(trigger.json.host | default('unknown-node')) }}"
-        metric_name: "{{ trigger.json.metric | default(trigger.json.service | default('general')) }}"
-        notif_id: "{{ trigger.json.notification_id | default('fleet_' ~ host ~ '_' ~ metric_name) }}"
-        notif_tag: "{{ host }}_{{ metric_name }}"
-        alert_title: "{{ trigger.json.title | default('[' ~ sev ~ '] ' ~ host ~ ': ' ~ metric_name) }}"
-        alert_msg: "{{ trigger.json.message | default(trigger.json.msg | default('Alert event reported from ' ~ host)) }}"
-        target_url: "{{ trigger.json.url | default('/lovelace/system') }}"
+        payload: "{{ trigger.json if (trigger is defined and trigger.json is mapping) else {} }}"
+        sev: "{{ (payload.get('severity') | default('WARN', true)) | upper }}"
+        host: "{{ payload.get('hostname') | default(payload.get('host') | default('unknown-node', true), true) }}"
+        metric_name: "{{ payload.get('metric') | default(payload.get('service') | default(payload.get('text', '').split(' ')[1] if (payload.get('text') is string and 'Container ' in payload.get('text', '')) else 'general', true), true) }}"
+        notif_tag: "{{ payload.get('tag') | default(payload.get('notif_tag') | default(host ~ '_' ~ metric_name, true), true) }}"
+        notif_id: "{{ payload.get('notification_id') | default('fleet_' ~ notif_tag, true) }}"
+        alert_title: "{{ payload.get('title') | default('[' ~ sev ~ '] ' ~ host ~ ': ' ~ metric_name, true) }}"
+        alert_msg: "{{ payload.get('message') | default(payload.get('msg') | default(payload.get('text') | default('Alert event reported from ' ~ host, true), true), true) }}"
+        target_url: "{{ payload.get('url') | default('/lovelace', true) }}"
 
     - choose:
-        # 1. RESOLVED / OK -> Auto-Dismiss Active Notification & Clear Phone
+        # 1. RESOLVED / OK / CLEARED -> Auto-Dismiss Active Notification & Clear Phone
         - conditions:
             - condition: template
               value_template: "{{ sev in ['RESOLVED', 'OK', 'CLEARED'] }}"
@@ -68,6 +69,8 @@
                   importance: high
                   priority: high
                   color: "#E53935"
+                  clickAction: "{{ target_url }}"
+                  url: "{{ target_url }}"
                   push:
                     sound:
                       name: default
@@ -106,6 +109,8 @@
                   importance: default
                   priority: default
                   color: "#FFA000"
+                  clickAction: "{{ target_url }}"
+                  url: "{{ target_url }}"
                   push:
                     sound: default
                   actions:
@@ -130,6 +135,8 @@
                   importance: low
                   priority: low
                   color: "#1E88E5"
+                  clickAction: "{{ target_url }}"
+                  url: "{{ target_url }}"
   mode: queued
   max: 30
 
@@ -145,7 +152,7 @@
       event_type: mobile_app_notification_action
   conditions:
     - condition: template
-      value_template: "{{ trigger.event.data.action.startswith('ACK_ALERT_') }}"
+      value_template: "{{ trigger.event.data.get('action') is string and trigger.event.data.action.startswith('ACK_ALERT_') }}"
   actions:
     - variables:
         notif_tag: "{{ trigger.event.data.action.replace('ACK_ALERT_', '') }}"

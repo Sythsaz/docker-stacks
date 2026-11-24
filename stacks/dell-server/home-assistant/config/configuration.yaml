@@ -270,7 +270,7 @@ rest_command:
       method: post
       headers:
           content-type: "application/json"
-      payload: '{"severity":"RESOLVED","hostname":"Justice","metric":"{{ metric }}"}'
+      payload: '{"severity":"RESOLVED","tag":"{{ metric }}","notification_id":"fleet_{{ metric }}"}'
       timeout: 5
 
 python_script:
